@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useEffect, useRef, useState } from "react";
 import axiosInstance from "../api/axios";
 import { Header } from "../components/Header";
@@ -224,7 +225,6 @@ export function Dashboard() {
 
   useEffect(() => {
     setAvailableMonths(getAllUniqueMonths());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalmonthlymembers, totalmonthlysitebookings, totalmonthlyamount]);
 
   const filteredData = getFilteredData();

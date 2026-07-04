@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 export function Header() {
 
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");

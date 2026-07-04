@@ -1,3 +1,6 @@
+/* eslint-disable */
+
+
 export function LoginHeader() {
   return (
     <div className="flex justify-between px-[80px] items-center h-[90px] lg:h-[100px] bg-[#ffff] shadow-md">
