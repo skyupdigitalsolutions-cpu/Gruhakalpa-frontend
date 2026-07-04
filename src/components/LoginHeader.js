@@ -1,10 +1,8 @@
-import { Link } from "react-router-dom";
-
 export function LoginHeader() {
   return (
     <div className="flex justify-between px-[80px] items-center h-[90px] lg:h-[100px] bg-[#ffff] shadow-md">
       <div className="flex items-center shado">
-        <img src="/images/gruhakalpa_logo.png" className="h-[80px]" />
+        <img src="/images/gruhakalpa_logo.png" alt="" className="h-[80px]" />
 
         <div className="ml-[25px]"></div>
       </div>

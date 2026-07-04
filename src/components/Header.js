@@ -1,7 +1,4 @@
-import { useNavigate } from "react-router-dom";
-
 export function Header() {
-  const navigate = useNavigate();
 
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
 

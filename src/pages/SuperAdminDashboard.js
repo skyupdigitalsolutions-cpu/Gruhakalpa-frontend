@@ -7,7 +7,7 @@ export function SuperAdminDashboard() {
   const [totalMembers, setTotalMembers] = useState(0);
   const [totalsitebookings, setTotalSiteBookings] = useState(0);
   const [totalreceipts, setTotalReceipts] = useState(0);
-  const [totalamount, setTotalAmount] = useState(0);
+  const [, setTotalAmount] = useState(0);
 
   useEffect(() => {
     axiosInstance.get("/members").then((res) => {

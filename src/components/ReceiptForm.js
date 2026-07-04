@@ -404,7 +404,7 @@ const CustomDatePicker = ({
 };
 
 const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
-  const [showReceipt, setShowReceipt] = useState(false);
+  const [, setShowReceipt] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [paymentItemsError, setPaymentItemsError] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);

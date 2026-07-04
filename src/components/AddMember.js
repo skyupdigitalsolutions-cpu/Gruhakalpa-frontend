@@ -552,6 +552,7 @@ const AddMember = () => {
     } else {
       formikStep1.setFieldValue("MembershipFees", "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formikStep1.values.MembershipType]);
 
   // useEffect(() => {

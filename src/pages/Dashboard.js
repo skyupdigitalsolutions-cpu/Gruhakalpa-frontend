@@ -224,6 +224,7 @@ export function Dashboard() {
 
   useEffect(() => {
     setAvailableMonths(getAllUniqueMonths());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalmonthlymembers, totalmonthlysitebookings, totalmonthlyamount]);
 
   const filteredData = getFilteredData();

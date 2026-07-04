@@ -94,7 +94,7 @@ export function MemberDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center px-10 py-[18px] shadow-sm bg-white">
         <div className="flex justify-center text-center items-center font-semibold text-[30px] text-[#7C66CA]">
-          <img src="/images/logo.svg" />
+          <img alt="" src="/images/logo.svg" />
           Welcome, Navanagara
         </div>
         <div className="flex items-center gap-4">
