@@ -2,7 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Header } from "./Header";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 export function MemberList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");

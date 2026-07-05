@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 const schema = Yup.object({
   username: Yup.string().trim().required("Seniority number is required"),

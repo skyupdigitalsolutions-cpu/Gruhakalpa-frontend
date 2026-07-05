@@ -9,7 +9,7 @@ import { ChevronDown, Check, Eye, Download } from "lucide-react";
 
 const MEMBERSHIP_FEES = 2500;
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 const membershipTypes = [
   { label: "Associate Member", value: "Associate Member" },

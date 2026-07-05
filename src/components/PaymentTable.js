@@ -2,7 +2,7 @@ import axios from "axios";
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 // ── Reusable Animated Dropdown ──
 function AnimatedDropdown({ value, onChange, options, placeholder }) {

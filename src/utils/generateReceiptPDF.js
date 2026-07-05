@@ -8,7 +8,7 @@
  *      ReceiptForm layout via html2canvas + jsPDF
  */
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 // ─── Helpers for fallback re-generation ──────────────────────────────────────
 
