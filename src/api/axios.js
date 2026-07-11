@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Base URL from environment variable or default to production backend
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+const API_BASE_URL = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
 
 // Create axios instance with default configuration
 const axiosInstance = axios.create({
