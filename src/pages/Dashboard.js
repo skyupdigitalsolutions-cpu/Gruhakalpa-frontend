@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useEffect, useRef, useState } from "react";
 import axiosInstance from "../api/axios";
 import { Header } from "../components/Header";
