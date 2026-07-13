@@ -86,6 +86,39 @@ export function SideBar({ prefix = "" }) {
 
           <li className="mt-3">
             <Link
+              to={`${prefix}/fixeddeposit`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/fixeddeposit`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/fixeddeposit`) ? "/images/shield_card_green.svg" : "/images/shield_card_white.svg"}
+                alt="Add Member"
+              />
+              <span className={isActive(`${prefix}/fixeddeposit`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Fixed Deposit
+              </span>
+            </Link>
+          </li>
+          <li className="mt-3">
+            <Link
+              to={`${prefix}/recurringdeposit`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/recurringdeposit`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/recurringdeposit`) ? "/images/assured_workload_green.svg" : "/images/assured_workload_white.svg"}
+                alt="Add Member"
+              />
+              <span className={isActive(`${prefix}/recurringdeposit`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Recurring Deposit
+              </span>
+            </Link>
+          </li>
+
+          <li className="mt-3">
+            <Link
               to={`${prefix}/receiptform`}
               className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
                 isActive(`${prefix}/receiptform`) ? "bg-[#FFFF]" : "hover:border hover:border-white"

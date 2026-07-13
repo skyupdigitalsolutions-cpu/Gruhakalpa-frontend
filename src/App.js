@@ -32,6 +32,8 @@ import { UpcomingPayments } from "./components/UpcomingPayments";
 import { BankStatement } from "./components/BankStatement";
 import { FixedDepositForm } from "./components/FixedDepositForm";
 import { RecurringDepositForm } from "./components/RecurringDepositForm";
+import { FixedDepositList } from "./components/FixedDepositList";
+import { RecurringDepositList } from "./components/RecurringDepositList";
 
 const MainApp = () => {
   const location = useLocation();
@@ -51,6 +53,8 @@ const MainApp = () => {
     "/superadmin/inwardoutward",
     "/superadmin/payments-due",
     "/superadmin/bankstatement",
+    "/superadmin/fixeddepositlist",
+    "/superadmin/recurringdepositlist",
   ];
 
   const memberRoutes = ["/member/dashboard"];
@@ -197,6 +201,22 @@ const MainApp = () => {
               </SuperAdminProtectedRoute>
             }
           />
+          <Route
+            path="/superadmin/fixeddepositlist"
+            element={
+              <SuperAdminProtectedRoute>
+                <FixedDepositList />
+              </SuperAdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/superadmin/recurringdepositlist"
+            element={
+              <SuperAdminProtectedRoute>
+                <RecurringDepositList />
+              </SuperAdminProtectedRoute>
+            }
+          />
 
           {/* Admin Protected Routes */}
           <Route
@@ -308,6 +328,22 @@ const MainApp = () => {
             element={
               <ProtectedRoute>
                 <RecurringDepositForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/fixeddepositlist"
+            element={
+              <ProtectedRoute>
+                <FixedDepositList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recurringdepositlist"
+            element={
+              <ProtectedRoute>
+                <RecurringDepositList />
               </ProtectedRoute>
             }
           />
