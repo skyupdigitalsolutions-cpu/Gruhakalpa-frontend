@@ -1,10 +1,30 @@
-/* eslint-disable */
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+
+// Add N calendar months to a date, clamping the day (Jan 31 + 1mo -> Feb 28/29)
+const addMonths = (base, months) => {
+  const d = new Date(base);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d;
+};
+
+// Pretty-print a date, or an em-dash when missing
+const fmtDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
 
 export function SiteBookingList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
@@ -15,6 +35,8 @@ export function SiteBookingList() {
   const [Memberdetails, SetMemberDetails] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | active | cancelled
+  const [cancelPenalty, setCancelPenalty] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showMemberDetails, setShowMemberDetails] = useState(false);
@@ -54,15 +76,21 @@ export function SiteBookingList() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredMembers(Memberdetails);
-    } else {
-      const filtered = Memberdetails.filter((member) =>
-        member.membership_id?.toLowerCase().includes(searchQuery.toLowerCase()),
-      );
-      setFilteredMembers(filtered);
+    let list = Memberdetails;
+
+    if (statusFilter === "active") {
+      list = list.filter((m) => !m.cancelled);
+    } else if (statusFilter === "cancelled") {
+      list = list.filter((m) => m.cancelled);
     }
-  }, [searchQuery, Memberdetails]);
+
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((m) => m.membership_id?.toLowerCase().includes(q));
+    }
+
+    setFilteredMembers(list);
+  }, [searchQuery, Memberdetails, statusFilter]);
 
   const handleSearchChange = (e) => setSearchQuery(e.target.value);
   const clearSearch = () => setSearchQuery("");
@@ -239,8 +267,110 @@ export function SiteBookingList() {
     return { totalAmount, paidAmount, remainingAmount, isNewUser };
   };
 
+  // Status pill colours for the schedule table
+  const statusStyle = {
+    Paid: "bg-green-100 text-green-700",
+    Partial: "bg-amber-100 text-amber-700",
+    Overdue: "bg-red-100 text-red-600",
+    Pending: "bg-gray-100 text-gray-500",
+  };
+
+  // ── Build the ordered installment schedule for a booking, and attribute how
+  //    much has been paid toward each bucket (and WHEN) from the member's
+  //    receipts. Payments waterfall across buckets in date order — Down Payment
+  //    first, then Installment 1, 2, ... — so partial payments fill earlier
+  //    buckets first. The membership fee (₹2500 for new users) is excluded so
+  //    it doesn't inflate the first bucket.
+  const buildSchedule = (member, receipts, isNewUser) => {
+    const bookingDate = member.date ? new Date(member.date) : new Date();
+    const rows = [];
+    const dp = Number(member.downpayment) || 0;
+    const isFull = member.paymentplan === "full";
+    const installments = Array.isArray(member.installments)
+      ? member.installments
+      : [];
+
+    if (isFull && installments.length === 0) {
+      rows.push({
+        label: "Full Payment",
+        amount: Number(member.totalamount) || 0,
+        dueDate: member.downPaymentDate || bookingDate,
+      });
+    } else {
+      if (dp > 0) {
+        rows.push({
+          label: "Down Payment",
+          amount: dp,
+          dueDate: member.downPaymentDate || bookingDate,
+        });
+      }
+      installments.forEach((it, i) => {
+        const amt = Number(it.amount) || 0;
+        if (amt <= 0) return;
+        rows.push({
+          label: it.label || `Installment ${i + 1}`,
+          amount: amt,
+          // Stored due date wins; legacy bookings fall back to monthly schedule.
+          dueDate: it.dueDate || addMonths(bookingDate, i + 1),
+        });
+      });
+    }
+
+    // Date-ordered payment chunks, with the membership fee peeled off the front.
+    const active = (receipts || [])
+      .filter((r) => !r.cancelled)
+      .slice()
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    const chunks = active.map((r) => ({
+      amount: Number(r.amountpaid) || 0,
+      date: r.date,
+    }));
+    let feeToRemove = isNewUser ? MEMBERSHIP_FEE : 0;
+    for (const c of chunks) {
+      if (feeToRemove <= 0) break;
+      const cut = Math.min(feeToRemove, c.amount);
+      c.amount -= cut;
+      feeToRemove -= cut;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let ci = 0;
+    for (const row of rows) {
+      let need = row.amount;
+      row.paid = 0;
+      row.paidDate = null;
+      while (need > 0 && ci < chunks.length) {
+        if (chunks[ci].amount <= 0) {
+          ci++;
+          continue;
+        }
+        const take = Math.min(need, chunks[ci].amount);
+        chunks[ci].amount -= take;
+        need -= take;
+        row.paid += take;
+        row.paidDate = chunks[ci].date; // last receipt that touched this bucket
+        if (chunks[ci].amount <= 0) ci++;
+      }
+      row.outstanding = Math.max(row.amount - row.paid, 0);
+      if (row.amount > 0 && row.outstanding === 0) {
+        row.status = "Paid";
+      } else if (row.paid > 0) {
+        row.status = "Partial";
+      } else {
+        const due = row.dueDate ? new Date(row.dueDate) : null;
+        if (due) due.setHours(0, 0, 0, 0);
+        row.status = due && due < today ? "Overdue" : "Pending";
+      }
+    }
+
+    return rows;
+  };
+
   const handleCancelClick = (member) => {
     setCancellingMember(member);
+    setCancelPenalty("");
     setShowCancelPopup(true);
   };
 
@@ -256,6 +386,8 @@ export function SiteBookingList() {
     const formData = new FormData();
     formData.append("cancellationPdf", cancelPdf);
     formData.append("bookingId", cancellingMember._id);
+    const penaltyValue = Number(cancelPenalty) || 0;
+    formData.append("penaltyAmount", penaltyValue);
 
     const token =
       localStorage.getItem("superAdminToken") ||
@@ -270,13 +402,16 @@ export function SiteBookingList() {
       });
       const updateCancelled = (list) =>
         list.map((m) =>
-          m._id === cancellingMember._id ? { ...m, cancelled: true } : m,
+          m._id === cancellingMember._id
+            ? { ...m, cancelled: true, cancellationPenalty: penaltyValue }
+            : m,
         );
       SetMemberDetails((prev) => updateCancelled(prev));
       setFilteredMembers((prev) => updateCancelled(prev));
       toast.success("Site booking cancelled successfully!");
       setShowCancelPopup(false);
       setCancelPdf(null);
+      setCancelPenalty("");
       setCancellingMember(null);
     } catch (err) {
       console.error("Cancellation error", err);
@@ -287,6 +422,7 @@ export function SiteBookingList() {
   const handleCancelPopupClose = () => {
     setShowCancelPopup(false);
     setCancelPdf(null);
+    setCancelPenalty("");
     setCancellingMember(null);
   };
 
@@ -307,6 +443,8 @@ export function SiteBookingList() {
     </div>
   );
 
+  const cancelledCount = Memberdetails.filter((m) => m.cancelled).length;
+
   return (
     <div>
       <Header />
@@ -314,8 +452,41 @@ export function SiteBookingList() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-semibold text-[24px]">All Sitebookings List</h1>
 
-          {/* Search bar */}
-          <div className="relative w-[300px]">
+          <div className="flex items-center gap-3">
+            {/* Status filter */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {[
+                ["all", "All"],
+                ["active", "Active"],
+                ["cancelled", "Cancelled"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setStatusFilter(key)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    statusFilter === key
+                      ? "bg-[#EF742C] text-white shadow"
+                      : "text-gray-600 hover:text-[#EF742C]"
+                  }`}
+                >
+                  {label}
+                  {key === "cancelled" && cancelledCount > 0 && (
+                    <span
+                      className={`ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                        statusFilter === key
+                          ? "bg-white text-[#EF742C]"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {cancelledCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Search bar */}
+            <div className="relative w-[300px]">
             <div className="relative">
               <input
                 type="text"
@@ -365,6 +536,7 @@ export function SiteBookingList() {
                 {filteredMembers.length !== 1 ? "s" : ""}
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -672,7 +844,7 @@ export function SiteBookingList() {
 
                     {/* Payment Summary */}
                     {(() => {
-                      const { paidAmount, remainingAmount, isNewUser } =
+                      const { totalAmount, paidAmount, remainingAmount, isNewUser } =
                         calculatePaymentSummary(selectedMember);
                       return (
                         <>
@@ -719,6 +891,170 @@ export function SiteBookingList() {
                       );
                     })()}
                   </dl>
+
+                  {/* Installment Schedule & Payment Dates */}
+                  {!selectedMember.cancelled &&
+                    (() => {
+                      const isNewUser = memberReceipts.some(
+                        (r) => r.is_new_user === true,
+                      );
+                      const schedule = buildSchedule(
+                        selectedMember,
+                        memberReceipts,
+                        isNewUser,
+                      );
+                      if (!schedule.length) return null;
+                      const totalPaid = schedule.reduce(
+                        (s, r) => s + (r.paid || 0),
+                        0,
+                      );
+                      const totalDue = schedule.reduce(
+                        (s, r) => s + (r.amount || 0),
+                        0,
+                      );
+                      return (
+                        <div className="mt-8">
+                          <h3 className="font-semibold text-[15px] mb-3 text-[#EF742C]">
+                            Installment Schedule &amp; Payment Dates
+                          </h3>
+                          <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-orange-50 text-left text-[#EF742C]">
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Installment
+                                  </th>
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Amount
+                                  </th>
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Due Date
+                                  </th>
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Paid
+                                  </th>
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Payment Date
+                                  </th>
+                                  <th className="px-4 py-2.5 font-semibold">
+                                    Status
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {schedule.map((row, i) => (
+                                  <tr
+                                    key={i}
+                                    className="border-t border-gray-100"
+                                  >
+                                    <td className="px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">
+                                      {row.label}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">
+                                      ₹
+                                      {Number(row.amount).toLocaleString(
+                                        "en-IN",
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
+                                      {fmtDate(row.dueDate)}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-green-600 font-medium whitespace-nowrap">
+                                      {row.paid > 0
+                                        ? `₹${Number(row.paid).toLocaleString("en-IN")}`
+                                        : "—"}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
+                                      {row.paidDate ? fmtDate(row.paidDate) : "—"}
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                      <span
+                                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                          statusStyle[row.status] ||
+                                          statusStyle.Pending
+                                        }`}
+                                      >
+                                        {row.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t border-gray-200 bg-gray-50 font-semibold text-gray-700">
+                                  <td className="px-4 py-2.5">Total</td>
+                                  <td className="px-4 py-2.5 whitespace-nowrap">
+                                    ₹{totalDue.toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="px-4 py-2.5" />
+                                  <td className="px-4 py-2.5 text-green-600 whitespace-nowrap">
+                                    ₹{totalPaid.toLocaleString("en-IN")}
+                                  </td>
+                                  <td className="px-4 py-2.5" colSpan={2} />
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                          {isFetchingReceipts && (
+                            <div className="text-xs text-gray-400 mt-2">
+                              Loading payments…
+                            </div>
+                          )}
+                          <div className="mt-2 text-[11px] text-gray-400">
+                            Paid amounts and payment dates are derived from this
+                            member's receipts (membership fee excluded). Bookings
+                            saved without due dates fall back to a monthly
+                            schedule from the booking date.
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  {/* Cancellation details */}
+                  {selectedMember.cancelled && (
+                    <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                      <h3 className="font-semibold text-[15px] mb-3 text-red-600">
+                        Cancellation Details
+                      </h3>
+                      <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm">
+                        <div>
+                          <span className="font-semibold text-gray-600">
+                            Penalty Amount:{" "}
+                          </span>
+                          <span className="text-red-600 font-semibold">
+                            ₹
+                            {Number(
+                              selectedMember.cancellationPenalty || 0,
+                            ).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                        {selectedMember.cancelledAt && (
+                          <div>
+                            <span className="font-semibold text-gray-600">
+                              Cancelled On:{" "}
+                            </span>
+                            <span>
+                              {new Date(
+                                selectedMember.cancelledAt,
+                              ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                        {selectedMember.cancellationPdfUrl && (
+                          <div className="col-span-2">
+                            <a
+                              href={selectedMember.cancellationPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#EF742C] font-medium hover:underline"
+                            >
+                              📎 View Cancellation Document
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Family Particulars Section */}
                   {selectedMember.nominees &&
@@ -1032,6 +1368,31 @@ export function SiteBookingList() {
                 </div>
               </label>
             </div>
+
+            {/* Optional penalty amount */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Penalty Amount{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={cancelPenalty}
+                  onChange={(e) => setCancelPenalty(e.target.value)}
+                  placeholder="0"
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Leave blank or 0 if no penalty is being charged.
+              </p>
+            </div>
+
             <div className="flex gap-3 justify-end">
               <button
                 onClick={handleCancelPopupClose}

@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import { ChevronDown, Check } from "lucide-react";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 const extractMessage = (data) => {
   if (!data) return "";
@@ -14,6 +14,30 @@ const extractMessage = (data) => {
   if (typeof data === "object")
     return data.message || data.error || data.msg || JSON.stringify(data);
   return String(data);
+};
+
+// Keep only the last 10 digits so "+91 98765 43210" == "9876543210"
+const normaliseMobile = (v) => String(v ?? "").replace(/\D/g, "").slice(-10);
+
+// Format a Date (or ISO string) as a "YYYY-MM-DD" string (what CustomDatePicker uses)
+const toISODate = (d) => {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return "";
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Add N calendar months to a date, clamping the day, return "YYYY-MM-DD"
+const addMonthsISO = (base, months) => {
+  const d = new Date(base);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return toISODate(d);
 };
 
 // ── Reusable Custom Dropdown ──
@@ -415,6 +439,15 @@ export function SiteBookingForm() {
   const [paymentBreakdown, setPaymentBreakdown] = useState(null);
   const [pricePerSqft, setPricePerSqft] = useState("");
 
+  // NEW: scheduled due dates for the down payment and each installment.
+  // installmentDates[i] is the due date (YYYY-MM-DD) for installment (i + 1).
+  const [downPaymentDate, setDownPaymentDate] = useState("");
+  const [installmentDates, setInstallmentDates] = useState([]);
+
+  // NEW: if a booking already exists for this client's mobile, hold it here
+  // so we can warn the admin and block submission.
+  const [duplicateBooking, setDuplicateBooking] = useState(null);
+
   // ── Exact pricing lookup (matches the official Excel sheet) ──
   // Keyed by [pricePerSqft][dimension]. Tier amounts are PER installment:
   //   dp = down payment, t1 = installments 1-6, t2 = installments 7-9, t3 = installments 10-14.
@@ -495,6 +528,14 @@ export function SiteBookingForm() {
     validateOnChange: false,
     validateOnBlur: false,
     onSubmit: async (values, { resetForm }) => {
+      // Block submission if a booking already exists for this client's mobile.
+      if (duplicateBooking) {
+        toast.error(
+          `Site booking already exists for this user (mobile ${duplicateBooking.mobilenumber}).`,
+        );
+        return;
+      }
+
       for (let i = 0; i < familyParticulars.length; i++) {
         const fp = familyParticulars[i];
         const anyFilled =
@@ -523,6 +564,17 @@ export function SiteBookingForm() {
         );
 
         const isFull = values.PaymentPlan === "full";
+
+        // Attach the chosen due date to each installment entry.
+        const installmentsPayload =
+          isFull || !paymentBreakdown || paymentBreakdown.full
+            ? []
+            : paymentBreakdown.installments.map((inst, i) => ({
+                label: inst.label,
+                amount: inst.amount,
+                dueDate: installmentDates[i] || null,
+              }));
+
         const payload = {
           name: values.Name,
           date: values.Date,
@@ -534,11 +586,9 @@ export function SiteBookingForm() {
           totalamount: Number(values.TotalAmount),
           // Full payment = single lump (no down payment / installment schedule)
           downpayment: isFull ? 0 : Number(values.DownPayment),
-          installments: isFull
-            ? []
-            : paymentBreakdown && !paymentBreakdown.full
-              ? paymentBreakdown.installments
-              : [],
+          // NEW: scheduled due date for the down payment.
+          downPaymentDate: isFull ? null : downPaymentDate || null,
+          installments: installmentsPayload,
           designation: values.Designation,
           membership_id: values.MembershipId,
           nominees: filteredFamilyParticulars,
@@ -556,6 +606,9 @@ export function SiteBookingForm() {
         setFamilyParticulars([{ name: "", age: "", relationship: "" }]);
         setPaymentBreakdown(null);
         setPricePerSqft("");
+        setDownPaymentDate("");
+        setInstallmentDates([]);
+        setDuplicateBooking(null);
       } catch (error) {
         console.error("Error submitting form:", error);
         if (error.response) {
@@ -605,6 +658,23 @@ export function SiteBookingForm() {
     }
   }, [formik.values.SiteDimension, pricePerSqft, formik.values.PaymentPlan]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-populate default due dates (monthly from the booking date) ──
+  // Runs whenever the breakdown structure or the booking date changes.
+  // Down Payment -> booking date; Installment N -> booking date + N months.
+  // The admin can override any of these in the pickers below.
+  useEffect(() => {
+    if (paymentBreakdown && !paymentBreakdown.full) {
+      const base = formik.values.Date ? new Date(formik.values.Date) : new Date();
+      setDownPaymentDate(toISODate(base));
+      setInstallmentDates(
+        paymentBreakdown.installments.map((_, i) => addMonthsISO(base, i + 1)),
+      );
+    } else {
+      setDownPaymentDate("");
+      setInstallmentDates([]);
+    }
+  }, [paymentBreakdown, formik.values.Date]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Clear dimension/price/breakdown whenever project changes (dimensions differ per project) ──
   useEffect(() => {
     formik.setFieldValue("SiteDimension", "");
@@ -638,6 +708,7 @@ export function SiteBookingForm() {
       setFullMembershipId("");
       formik.setFieldValue("MembershipId", "");
       setMemberStatus("idle");
+      setDuplicateBooking(null);
       // Only clear fields that were auto-filled (i.e., when member was found)
       if (memberStatus === "found") {
         formik.setFieldValue("Name", "");
@@ -647,36 +718,65 @@ export function SiteBookingForm() {
     }
   }, [membershipInput, formik.values.ProjectName, formik.values.Year]); // eslint-disable-line react-hooks/exhaustive-deps
 
-const fetchMemberDetails = async (membershipId) => {
-  setIsFetchingMember(true);
-  setMemberStatus("idle");
-  try {
-    const response = await axios.get(`${API_BASE}/members`);
-    const members = response.data.data || [];
-    const member = members.find((m) => m.membership_id === membershipId);
-    if (member) {
-      const mobile =
-        member.mobile ??
-        member.mobile_number ??
-        member.mobileNumber ??
-        member.MobileNumber ??
-        "";
-      formik.setFieldValue("Name", member.name || "");
-      formik.setFieldValue("MobileNumber", mobile ? String(mobile) : "");
-      formik.setFieldValue("Designation", member.designation || "");
-      setMemberStatus("found");
-      toast.success(`Membership exists — lead data auto-filled!`);
-    } else {
-      setMemberStatus("not_found");
+  // Check whether a site booking already exists for this client's mobile.
+  const checkDuplicateBooking = async (mobile) => {
+    const m = normaliseMobile(mobile);
+    if (!m) {
+      setDuplicateBooking(null);
+      return;
     }
-  } catch (error) {
-    console.error("Error fetching member details:", error);
-    setMemberStatus("not_found");
-    toast.error("Error fetching member details.");
-  } finally {
-    setIsFetchingMember(false);
-  }
-};
+    try {
+      const res = await axios.get(`${API_BASE}/sitebookings`);
+      const list = Array.isArray(res.data) ? res.data : [];
+      const dup = list.find(
+        (b) => !b.cancelled && normaliseMobile(b.mobilenumber) === m,
+      );
+      setDuplicateBooking(dup || null);
+      if (dup) {
+        toast.error(
+          `Site booking already exists for this user (mobile ${dup.mobilenumber}).`,
+        );
+      }
+    } catch (error) {
+      console.error("Error checking duplicate booking:", error);
+      setDuplicateBooking(null);
+    }
+  };
+
+  const fetchMemberDetails = async (membershipId) => {
+    setIsFetchingMember(true);
+    setMemberStatus("idle");
+    try {
+      const response = await axios.get(`${API_BASE}/members`);
+      const members = response.data.data || [];
+      const member = members.find((m) => m.membership_id === membershipId);
+      if (member) {
+        const mobile =
+          member.mobile ??
+          member.mobile_number ??
+          member.mobileNumber ??
+          member.MobileNumber ??
+          "";
+        formik.setFieldValue("Name", member.name || "");
+        formik.setFieldValue("MobileNumber", mobile ? String(mobile) : "");
+        formik.setFieldValue("Designation", member.designation || "");
+        setMemberStatus("found");
+        toast.success(`Membership exists — lead data auto-filled!`);
+        // A member exists — check whether they already have a site booking.
+        checkDuplicateBooking(mobile);
+      } else {
+        setMemberStatus("not_found");
+        setDuplicateBooking(null);
+      }
+    } catch (error) {
+      console.error("Error fetching member details:", error);
+      setMemberStatus("not_found");
+      setDuplicateBooking(null);
+      toast.error("Error fetching member details.");
+    } finally {
+      setIsFetchingMember(false);
+    }
+  };
 
   const handleMembershipInputChange = (e) => {
     // Only allow digits, max 4 digits
@@ -705,6 +805,14 @@ const fetchMemberDetails = async (membershipId) => {
       setFamilyParticulars((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const setInstallmentDate = (idx, val) => {
+    setInstallmentDates((prev) => {
+      const copy = [...prev];
+      copy[idx] = val;
+      return copy;
+    });
+  };
+
   const dimensionOptions = (dimensions[formik.values.ProjectName] || []).map(
     (d) => ({
       label: d,
@@ -723,7 +831,8 @@ const fetchMemberDetails = async (membershipId) => {
     typeof submitMessage === "string" &&
     (submitMessage.includes("Error") ||
       submitMessage.includes("error") ||
-      submitMessage.includes("not found"));
+      submitMessage.includes("not found") ||
+      submitMessage.includes("already exists"));
 
   // Membership status badge config
   const membershipBadge = {
@@ -868,6 +977,19 @@ const fetchMemberDetails = async (membershipId) => {
                 </div>
               )}
 
+              {/* Duplicate-booking warning (keyed on mobile number) */}
+              {duplicateBooking && (
+                <div className="text-xs mt-1.5 px-2.5 py-1.5 rounded-md font-medium flex items-start gap-1.5 text-red-700 bg-red-50 border border-red-200">
+                  <span>✕</span>
+                  <span>
+                    Site booking already exists for this user (mobile{" "}
+                    {duplicateBooking.mobilenumber}) under membership{" "}
+                    {duplicateBooking.membership_id}. Duplicate booking is not
+                    allowed.
+                  </span>
+                </div>
+              )}
+
               {formik.touched.MembershipId && formik.errors.MembershipId && (
                 <div className="text-red-500 text-sm mt-1">
                   {formik.errors.MembershipId}
@@ -907,6 +1029,10 @@ const fetchMemberDetails = async (membershipId) => {
                 placeholder="Enter Mobile Number"
                 value={formik.values.MobileNumber}
                 onChange={formik.handleChange}
+                onBlur={() =>
+                  memberStatus !== "found" &&
+                  checkDuplicateBooking(formik.values.MobileNumber)
+                }
                 maxLength={10}
                 className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
@@ -1064,7 +1190,7 @@ const fetchMemberDetails = async (membershipId) => {
               <h3 className="font-semibold text-[14px] mb-3 text-[#EF742C]">
                 Payment Breakdown
                 <span className="text-gray-400 font-normal text-xs ml-2">
-                  (auto-calculated from dimension × price per sq.ft)
+                  (auto-calculated from dimension × price — set a due date for each)
                 </span>
               </h3>
               <div className="bg-white border border-[#EF742C]/20 rounded-xl p-5">
@@ -1078,6 +1204,14 @@ const fetchMemberDetails = async (membershipId) => {
                     <div className="border border-[#EF742C]/30 bg-orange-50 rounded-md px-3 py-2 text-sm font-bold text-[#EF742C]">
                       ₹ {paymentBreakdown.downPayment.toLocaleString("en-IN")}
                     </div>
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mt-1">
+                      Due date
+                    </span>
+                    <CustomDatePicker
+                      value={downPaymentDate}
+                      onChange={(val) => setDownPaymentDate(val)}
+                      placeholder="Select due date"
+                    />
                   </div>
 
                   {/* 14 installments */}
@@ -1094,6 +1228,14 @@ const fetchMemberDetails = async (membershipId) => {
                         <div className="border border-gray-200 bg-gray-50 rounded-md px-3 py-2 text-sm font-semibold text-gray-700">
                           ₹ {inst.amount.toLocaleString("en-IN")}
                         </div>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mt-1">
+                          Due date
+                        </span>
+                        <CustomDatePicker
+                          value={installmentDates[idx] || ""}
+                          onChange={(val) => setInstallmentDate(idx, val)}
+                          placeholder="Select due date"
+                        />
                       </div>
                     );
                   })}
@@ -1108,6 +1250,10 @@ const fetchMemberDetails = async (membershipId) => {
                   <span className="text-green-600 font-semibold">
                     ✓ Breakdown = Down Payment + 14 Installments
                   </span>
+                </div>
+                <div className="mt-2 text-[11px] text-gray-400">
+                  Due dates default to one month apart from the booking date —
+                  adjust any of them as needed.
                 </div>
               </div>
             </div>
@@ -1220,8 +1366,8 @@ const fetchMemberDetails = async (membershipId) => {
           <div className="flex justify-end mt-4">
             <button
               type="submit"
-              disabled={isSubmitting}
-              className={`bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white font-bold px-8 py-2.5 rounded-full shadow-lg w-[150px] ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isSubmitting || !!duplicateBooking}
+              className={`bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white font-bold px-8 py-2.5 rounded-full shadow-lg w-[150px] ${isSubmitting || duplicateBooking ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {isSubmitting ? "Submitting..." : "Submit"}
             </button>

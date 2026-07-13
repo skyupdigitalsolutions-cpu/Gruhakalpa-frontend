@@ -1,10 +1,9 @@
-/* eslint-disable */
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateReceiptPDF } from "../utils/generateReceiptPDF";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 export function MemberDashboard() {
   const navigate = useNavigate();
@@ -33,11 +32,11 @@ export function MemberDashboard() {
     if (stored) {
       const data = JSON.parse(stored);
       setMemberData(data);
-      fetchData(data.seniority_no);
+      fetchData(data.membership_id);
     }
   }, []);
 
-  const fetchData = async (seniority_no) => {
+  const fetchData = async (membershipId) => {
     try {
       const token = localStorage.getItem("memberToken");
       const headers = { Authorization: `Bearer ${token}` };
@@ -47,14 +46,14 @@ export function MemberDashboard() {
         headers,
       });
       const booking = (bookingsRes.data || []).find(
-        (b) => b.seniority_no === seniority_no,
+        (b) => b.membership_id === membershipId,
       );
       setSiteBooking(booking || null);
 
       // Fetch receipts for this member
       const receiptsRes = await axios.get(`${API_BASE}/receipts`, { headers });
       const memberReceipts = (receiptsRes.data?.data || []).filter(
-        (r) => r.seniority_no === seniority_no,
+        (r) => r.membershipid === membershipId || r.seniority_no === membershipId,
       );
       setReceipts(memberReceipts);
     } catch (err) {
@@ -88,15 +87,38 @@ export function MemberDashboard() {
   );
   const pendingAmount = totalAmount - paidAmount;
 
-  const tableHeaders = ["Date", "Receipt No.", "Transaction ID", "Amount", ""];
+  const tableHeaders = [
+    "Date",
+    "Receipt No.",
+    "Transaction ID",
+    "Payment For",
+    "Amount",
+    "",
+  ];
+
+  // What the receipt was paid towards — Booking Advance / Downpayment / Installments
+  const getPaymentFor = (receipt) => {
+    if (Array.isArray(receipt.allocations) && receipt.allocations.length > 0) {
+      return receipt.allocations
+        .map((a) => a.label || a.bucket)
+        .filter(Boolean);
+    }
+    if (receipt.paymenttype) {
+      return String(receipt.paymenttype)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="flex justify-between items-center px-10 py-[18px] shadow-sm bg-white">
-        <div className="flex justify-center text-center items-center font-semibold text-[30px] text-[#7C66CA]">
-          <img alt="" src="/images/logo.svg" />
-          Welcome, Navanagara
+        <div className="flex justify-center text-center items-center font-semibold text-[30px] text-[#EF742C]">
+          <img src="/images/bg-removed-logo.webp" className="h-20 w-16" />
+          Gruhakalpa Housing Co-operative Society
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
@@ -114,7 +136,7 @@ export function MemberDashboard() {
           <div className="h-8 w-px bg-gray-300" />
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#7C66CA] text-[#7C66CA] text-[14px] font-semibold hover:bg-[#7C66CA] hover:text-white transition-colors duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border-1 border-[#EF742C] text-[#EF742C] text-[14px] font-semibold hover:bg-[#EF742C] hover:text-white transition-colors duration-200"
           >
             <img src="/images/exit.svg" alt="Sign Out" className="w-4 h-4" />
             Sign Out
@@ -127,7 +149,7 @@ export function MemberDashboard() {
         <h2 className="font-semibold text-[20px] mb-6">Overview</h2>
         <div className="flex gap-6 mb-10 justify-start">
           {/* Total Amount */}
-          <div className="bg-[#8356D6] rounded-2xl p-6 w-[260px] flex items-center gap-4">
+          <div className="bg-[#EF742C] rounded-2xl p-6 w-[260px] flex items-center gap-4">
             <div className="w-1 h-12 bg-yellow-400 rounded-full" />
             <div>
               <p className="text-white text-[16px] font-medium">Total Amount</p>
@@ -138,7 +160,7 @@ export function MemberDashboard() {
           </div>
 
           {/* Paid Amount */}
-          <div className="bg-[#8356D6] rounded-2xl p-6 w-[260px] flex items-center gap-4">
+          <div className="bg-[#EF742C] rounded-2xl p-6 w-[260px] flex items-center gap-4">
             <div className="w-1 h-12 bg-green-400 rounded-full" />
             <div>
               <p className="text-white text-[16px] font-medium">Paid Amount</p>
@@ -150,7 +172,7 @@ export function MemberDashboard() {
 
           {/* Pending Amount */}
           <div
-            className={`rounded-2xl p-6 w-[260px] flex items-center gap-4 ${pendingAmount > 0 ? "bg-red-500" : "bg-[#8356D6]"}`}
+            className={`rounded-2xl p-6 w-[260px] flex items-center gap-4 ${pendingAmount > 0 ? "bg-red-500" : "bg-[#EF742C]"}`}
           >
             <div className="w-1 h-12 bg-yellow-400 rounded-full" />
             <div>
@@ -162,6 +184,25 @@ export function MemberDashboard() {
               </p>
             </div>
           </div>
+
+          {/* Cancellation Penalty — only when booking was cancelled with a penalty */}
+          {siteBooking?.cancelled &&
+            Number(siteBooking?.cancellationPenalty) > 0 && (
+              <div className="bg-red-600 rounded-2xl p-6 w-[260px] flex items-center gap-4">
+                <div className="w-1 h-12 bg-yellow-400 rounded-full" />
+                <div>
+                  <p className="text-white text-[16px] font-medium">
+                    Cancellation Penalty
+                  </p>
+                  <p className="text-white text-[28px] font-bold">
+                    ₹
+                    {Number(
+                      siteBooking.cancellationPenalty,
+                    ).toLocaleString("en-IN")}
+                  </p>
+                </div>
+              </div>
+            )}
         </div>
 
         {/* Receipts Table */}
@@ -172,7 +213,7 @@ export function MemberDashboard() {
         <div className="overflow-hidden rounded-2xl shadow-lg">
           <table className="w-full">
             <thead>
-              <tr className="bg-[#8356D6]">
+              <tr className="bg-[#EF742C]">
                 {tableHeaders.map((header, index) => (
                   <th
                     key={index}
@@ -200,6 +241,22 @@ export function MemberDashboard() {
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {receipt.transactionid || "-"}
                   </td>
+                  <td className="px-6 py-4">
+                    {getPaymentFor(receipt).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {getPaymentFor(receipt).map((label, i) => (
+                          <span
+                            key={i}
+                            className="bg-orange-50 text-[#EF742C] border border-orange-200 text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {receipt.amountpaid
                       ? `₹${Number(receipt.amountpaid).toLocaleString("en-IN")}`
@@ -209,14 +266,14 @@ export function MemberDashboard() {
                     <div className="flex justify-center items-center gap-2">
                       <button
                         onClick={() => handleViewDetails(receipt)}
-                        className="w-[110px] font-medium border-1 py-[6px] px-[10px] border-[#8356D6] rounded text-[14px] text-[#8356D6] hover:bg-[#8356D6] hover:text-white transition-colors duration-200"
+                        className="w-[110px] font-medium border-1 py-[6px] px-[10px] border-[#EF742C] rounded text-[14px] text-[#EF742C] hover:bg-[#EF742C] hover:text-white transition-colors duration-200"
                       >
                         View More
                       </button>
                       <button
                         onClick={() => handleDownloadReceipt(receipt)}
                         disabled={downloadingId === receipt._id}
-                        className="w-[110px] font-medium border-1 py-[6px] px-[10px] border-[#8356D6] rounded text-[14px] text-[#8356D6] hover:bg-[#8356D6] hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                        className="w-[110px] font-medium border-1 py-[6px] px-[10px] border-[#EF742C] rounded text-[14px] text-[#EF742C] hover:bg-[#EF742C] hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                       >
                         {downloadingId === receipt._id ? (
                           "..."
@@ -272,7 +329,7 @@ export function MemberDashboard() {
             <div className="p-6 pb-4 flex justify-between items-center">
               <button
                 onClick={closeModal}
-                className="flex items-center gap-2 text-[#8356D6] border border-[#8356D6] px-4 py-2 rounded-full hover:bg-purple-50 transition-colors"
+                className="flex items-center gap-2 text-[#EF742C] border border-[#EF742C] px-4 py-2 rounded-full hover:bg-purple-50 transition-colors"
               >
                 <svg
                   className="w-5 h-5"
@@ -316,12 +373,12 @@ export function MemberDashboard() {
                 <dl className="flex gap-[70px] mb-6 pb-6 border-b border-gray-200">
                   <div className="flex items-center gap-2">
                     <img
-                      src="/images/person_1.svg"
+                      src="/images/person_green.svg"
                       alt="Person icon"
                       className="pb-1"
                     />
                     <div className="flex">
-                      <dt className="text-[#8356D6] font-medium text-[16px]">
+                      <dt className="text-[#EF742C] font-medium text-[16px]">
                         Name:
                       </dt>
                       &nbsp;
@@ -332,28 +389,28 @@ export function MemberDashboard() {
                   </div>
                   <div className="flex items-center gap-2">
                     <img
-                      src="/images/assignment_ind.png"
+                      src="/images/assignment_ind_green.svg"
                       alt="ID icon"
                       className="pb-1"
                     />
                     <div className="flex">
-                      <dt className="text-[#8356D6] font-medium text-[16px]">
-                        Seniority No:
+                      <dt className="text-[#EF742C] font-medium text-[16px]">
+                        Membership ID:
                       </dt>
                       &nbsp;
                       <dd className="font-semibold text-[16px] text-[#595757]">
-                        {selectedReceipt.seniority_no || "-"}
+                        {selectedReceipt.membershipid || selectedReceipt.seniority_no || "-"}
                       </dd>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <img
-                      src="/images/call.svg"
+                      src="/images/call_green.svg"
                       alt="Phone icon"
                       className="pb-1"
                     />
                     <div className="flex">
-                      <dt className="text-[#8356D6] font-medium text-[16px]">
+                      <dt className="text-[#EF742C] font-medium text-[16px]">
                         Mobile:
                       </dt>
                       &nbsp;
@@ -377,7 +434,18 @@ export function MemberDashboard() {
                     ],
                     ["Project Name", selectedReceipt.projectname],
                     ["Site Dimension", selectedReceipt.sitedimension],
-                    ["Payment Type", selectedReceipt.paymenttype],
+                    [
+                      "Payment Type",
+                      Array.isArray(selectedReceipt.allocations) &&
+                      selectedReceipt.allocations.length > 0
+                        ? selectedReceipt.allocations
+                            .map(
+                              (a) =>
+                                `${a.label || a.bucket} — ₹${Number(a.amount || 0).toLocaleString("en-IN")}`,
+                            )
+                            .join(", ")
+                        : selectedReceipt.paymenttype,
+                    ],
                     ["Payment Mode", selectedReceipt.paymentmode],
                     ["Bank", selectedReceipt.bank],
                     [

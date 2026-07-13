@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect, useRef } from "react";
 import { useFormik } from "formik";
 import * as yup from "yup";
@@ -9,7 +8,7 @@ import { ChevronDown, Check, Eye, Download } from "lucide-react";
 
 const MEMBERSHIP_FEES = 2500;
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 const membershipTypes = [
   { label: "Associate Member", value: "Associate Member" },
@@ -503,6 +502,7 @@ const AddMember = () => {
       Name: "",
       ProjectName: "",
       membership_id: "",
+      MembershipReceiptNo: "",
       MembershipType: "",
       ApplicationNumber: "",
       MembershipDate: "",
@@ -519,6 +519,9 @@ const AddMember = () => {
         .matches(/^[A-Za-z\s]+$/, "Only letters allowed"),
       // ProjectName: yup.string().required("Project Name is required"),
       membership_id: yup.string().required("Membershipid should not be null"),
+      MembershipReceiptNo: yup
+        .string()
+        .matches(/^[0-9]*$/, "Only numbers allowed"),
       MembershipType: yup.string().required("Membership type is required"),
       ApplicationNumber: yup
         .string()
@@ -553,7 +556,6 @@ const AddMember = () => {
     } else {
       formikStep1.setFieldValue("MembershipFees", "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formikStep1.values.MembershipType]);
 
   // useEffect(() => {
@@ -693,6 +695,7 @@ const AddMember = () => {
       const finalData = {
         name: formikStep1.values.Name,
         membership_id: formikStep1.values.membership_id,
+        membership_receipt_no: formikStep1.values.MembershipReceiptNo || "",
         membershiptype: formikStep1.values.MembershipType,
         applicationno: String(formikStep1.values.ApplicationNumber),
         date: new Date(),
@@ -746,6 +749,7 @@ const AddMember = () => {
           MembershipDate: formikStep1.values.MembershipDate,
           mobile: formikStep1.values.MobileNumber,
           email: formikStep1.values.Email,
+          receiptNo: response.data?.data?.membership_receipt_no || "",
           date: new Date().toISOString().split("T")[0],
         });
         setIsFormCompleted(true);
@@ -843,137 +847,50 @@ const AddMember = () => {
     setIsGeneratingMemberPDF(true);
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const jsPDF = (await import("jspdf")).default;
+      const { default: jsPDF } = await import("jspdf");
+      const { createRoot } = await import("react-dom/client");
 
+      // Render the same React receipt used in the preview into an off-screen
+      // A4-width container, then place it with a small margin so the borders
+      // never bleed off the page (mirrors the ReceiptForm PDF pipeline).
       const container = document.createElement("div");
       container.style.cssText =
-        "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;";
-      container.innerHTML = buildMemberReceiptHTML(memberReceiptData);
+        "position:fixed;left:-9999px;top:0;width:786px;background:#fff;padding:4px;margin:4px;box-sizing:border-box;";
       document.body.appendChild(container);
-      await new Promise((r) => setTimeout(r, 600));
+      const root = createRoot(container);
+      await new Promise((resolve) => {
+        root.render(<MemberReceiptContent data={memberReceiptData} />);
+        setTimeout(resolve, 800);
+      });
 
       const canvas = await html2canvas(container, {
-        scale: 1.5,
+        scale: 4,
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: "#ffffff",
         width: 794,
+        x: -4,
+        y: -4,
       });
-      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      root.unmount();
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.9);
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
-      const pdfW = 210,
-        pdfH = 297;
-      const imgH = (canvas.height * pdfW) / canvas.width;
-      let fw = pdfW,
-        fh = imgH;
-      if (imgH > pdfH) {
-        fh = pdfH;
-        fw = (canvas.width * pdfH) / canvas.height;
-      }
-      pdf.addImage(imgData, "JPEG", (pdfW - fw) / 2, 0, fw, fh);
+      // 1mm margin all round keeps the outer border inside the printable area.
+      pdf.addImage(imgData, "JPEG", 1, 1, 208, 295);
       const filename = `Member_Receipt_${(memberReceiptData.membership_id || "").replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
       pdf.save(filename);
-      document.body.removeChild(container);
     } catch (err) {
       console.error("PDF generation error:", err);
       toast.error("Failed to generate PDF. Please try again.");
     }
     setIsGeneratingMemberPDF(false);
-  };
-
-  const buildMemberReceiptHTML = (data) => {
-    const amountInWords = numberToWords(MEMBER_RECEIPT_TOTAL);
-    const partRows = MEMBER_RECEIPT_BREAKDOWN.map(
-      (item, idx) => `
-      <tr>
-        <td style="border:1px solid #000;padding:8px;width:5%;text-align:center;">${idx + 1}.</td>
-        <td style="border:1px solid #000;padding:8px;text-align:left;">${item.name}</td>
-        <td style="border:1px solid #000;padding:8px;"></td>
-        <td style="border:1px solid #000;padding:8px;text-align:center;">Rs.${item.amount.toLocaleString("en-IN")}</td>
-        <td style="border:1px solid #000;padding:8px;"></td>
-      </tr>`,
-    ).join("");
-
-    return `
-      <div style="border:2px solid #000;background:#fff;padding:20px;font-family:Arial,sans-serif;width:754px;min-height:1063px;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;height:150px;border-bottom:2px solid #000;padding-bottom:15px;margin-bottom:16px;margin-left:-20px;margin-right:-20px;padding-left:10px;gap:10px;">
-          <div style="flex-shrink:0;">
-            <img src="/images/logoblack.webp" alt="Logo" style="width:150px;height:140px;object-fit:contain;" crossorigin="anonymous"/>
-          </div>
-          <div style="flex:1;text-align:center;">
-            <div style="font-size:18px;font-weight:bold;margin-bottom:4px;">ಗ್ರುಹ ಕಲ್ಪ ಹೌಸ್ ಬಿಲ್ಡಿಂಗ್ ಕೋ-ಆಪರೇಟಿವ್ ಸೊಸೈಟಿ ಲಿ.</div>
-            <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">GRUHAKALPA HOUSE BUILDING CO-OPERATIVE SOCIETY LTD.</div>
-            <div style="font-size:11px;margin-bottom:2px;">Bangalore</div>
-            <div style="font-size:11px;margin-bottom:2px;">Reg. No: ____________________</div>
-          </div>
-          <div style="width:80px;flex-shrink:0;"></div>
-        </div>
-        <div style="text-align:center;padding-bottom:8px;">
-          <span style="border:2px solid #000;font-weight:bold;font-size:14px;padding:5px 10px 18px;">MEMBERSHIP RECEIPT</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:13px;font-weight:bold;margin-top:8px;">
-          <div>Membership ID: ${data.membership_id || "-"}</div>
-          <div>Date: ${formatReceiptDate(data.date)}</div>
-        </div>
-        <div style="font-size:13px;margin-bottom:16px;">
-          <div style="margin-bottom:4px;"><strong>Received From Smt./Shree: ${data.name || "-"}</strong></div>
-          <div style="margin-bottom:4px;"><strong>Rupees: ${amountInWords} Only.</strong></div>
-          <div style="margin-bottom:4px;"><strong>Membership Type: ${data.membershiptype || "-"}</strong></div>
-          <div><strong>Application No: ${data.applicationno || "-"}</strong></div>
-        </div>
-        <div style="margin-bottom:16px;">
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;font-size:11px;">
-            <thead><tr>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">S.No</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Payment Type</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Payment Mode</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Bank</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Branch</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Cheque/Transaction ID</th>
-              <th style="border:1px solid #000;padding:6px;text-align:center;font-weight:bold;">Amount</th>
-            </tr></thead>
-            <tbody><tr>
-              <td style="border:1px solid #000;padding:6px;text-align:center;">1</td>
-              <td style="border:1px solid #000;padding:6px;text-align:center;">Membership Fee</td>
-              <td style="border:1px solid #000;padding:6px;text-align:center;">Cash</td>
-              <td style="border:1px solid #000;padding:6px;text-align:center;"></td>
-              <td style="border:1px solid #000;padding:6px;text-align:center;"></td>
-              <td style="border:1px solid #000;padding:6px;text-align:center;"></td>
-              <td style="border:1px solid #000;padding:6px;text-align:right;">Rs.${MEMBER_RECEIPT_TOTAL.toLocaleString("en-IN")}</td>
-            </tr></tbody>
-          </table>
-        </div>
-        <div style="margin-bottom:16px;">
-          <table style="width:100%;border-collapse:collapse;border:1px solid #000;font-size:12px;">
-            <thead><tr>
-              <th colspan="2" style="border:1px solid #000;padding:8px;text-align:center;font-weight:bold;width:70%;background:#f0f0f0;">Particulars</th>
-              <th style="border:1px solid #000;padding:8px;text-align:center;font-weight:bold;width:5%;background:#f0f0f0;">L.F</th>
-              <th style="border:1px solid #000;padding:8px;text-align:center;font-weight:bold;width:20%;background:#f0f0f0;">Rs.</th>
-              <th style="border:1px solid #000;padding:8px;text-align:center;font-weight:bold;width:5%;background:#f0f0f0;">P</th>
-            </tr></thead>
-            <tbody>
-              ${partRows}
-              <tr style="font-weight:bold;">
-                <td colspan="2" style="border:1px solid #000;padding:8px;"><strong>Total</strong></td>
-                <td style="border:1px solid #000;padding:8px;"></td>
-                <td style="border:1px solid #000;padding:8px;text-align:center;"><strong>Rs.${MEMBER_RECEIPT_TOTAL.toLocaleString("en-IN")}</strong></td>
-                <td style="border:1px solid #000;padding:8px;"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div style="font-size:11px;font-style:italic;margin-bottom:32px;">
-          *This is an official membership receipt. Please keep it for your records.
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:40px;">
-          <div>Member's Signature</div>
-          <div>President/Secretary</div>
-        </div>
-      </div>`;
   };
 
   const MemberReceiptContent = ({ data }) => {
@@ -1004,9 +921,9 @@ const AddMember = () => {
         >
           <div style={{ flexShrink: 0 }}>
             <img
-              src="/images/logoblack.webp"
+              src="/images/bg-removed-logo.webp"
               alt="Logo"
-              style={{ width: "150px", height: "140px", objectFit: "contain" }}
+              style={{ width: "160px", height: "140px", objectFit: "contain" }}
             />
           </div>
           <div style={{ flex: 1, textAlign: "center" }}>
@@ -1017,7 +934,7 @@ const AddMember = () => {
                 marginBottom: "4px",
               }}
             >
-              ಗ್ರುಹ ಕಲ್ಪ ಹೌಸ್ ಬಿಲ್ಡಿಂಗ್ ಕೋ-ಆಪರೇಟಿವ್ ಸೊಸೈಟಿ ಲಿ.
+              ದಿ ಗೃಹಕಲ್ಪ ಹೌಸಿಂಗ್ ಕೋ-ಆಪರೇಟಿವ್ ಸೊಸೈಟಿ ಲಿ.
             </div>
             <div
               style={{
@@ -1026,13 +943,31 @@ const AddMember = () => {
                 marginBottom: "4px",
               }}
             >
-              GRUHAKALPA HOUSE BUILDING CO-OPERATIVE SOCIETY LTD.
+              THE GRUHAKALPA HOUSING CO-OPERATIVE SOCIETY LTD.
             </div>
             <div style={{ fontSize: "11px", marginBottom: "2px" }}>
-              Bangalore
+              Parinidhi #23, E Block, 14th A Main Road, 2nd Floor,Sahakaranagar,
+              Bangalore - 560092
             </div>
             <div style={{ fontSize: "11px", marginBottom: "2px" }}>
-              Reg. No: ____________________
+              Reg. No.: JRB/RGN/CR-04/51586/2023-2024 Date: 21/11/23
+            </div>
+            <div style={{ fontSize: "11px" }}>
+              <a
+                href="https://www.gruhakalpahousingsociety.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#000000", textDecoration: "none" }}
+              >
+                www.gruhakalpahousingsociety.in
+              </a>
+              {" / "}
+              <a
+                href="mailto:contact@gruhakalpahousingsociety.in"
+                style={{ color: "#000000", textDecoration: "none" }}
+              >
+                Email: contact@gruhakalpahousingsociety.in
+              </a>
             </div>
           </div>
           <div style={{ width: "80px", flexShrink: 0 }}></div>
@@ -1053,14 +988,23 @@ const AddMember = () => {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            marginBottom: "16px",
             fontSize: "13px",
             fontWeight: "bold",
             marginTop: "8px",
+            marginBottom: "6px",
+          }}
+        >
+          <div>Receipt No.: {data.receiptNo || "-"}</div>
+          <div>Date: {formatReceiptDate(data.date)}</div>
+        </div>
+        <div
+          style={{
+            fontSize: "13px",
+            fontWeight: "bold",
+            marginBottom: "16px",
           }}
         >
           <div>Membership ID: {data.membership_id || "-"}</div>
-          <div>Date: {formatReceiptDate(data.date)}</div>
         </div>
         <div style={{ fontSize: "13px", marginBottom: "16px" }}>
           <div style={{ marginBottom: "4px" }}>
@@ -1303,12 +1247,27 @@ const AddMember = () => {
           style={{
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "flex-end",
             fontSize: "13px",
             marginTop: "40px",
           }}
         >
           <div>Member's Signature</div>
-          <div>President/Secretary</div>
+          <div style={{ textAlign: "center" }}>
+            <img
+              src="/images/president-signature.webp"
+              alt="President/Secretary Signature"
+              style={{
+                height: "55px",
+                objectFit: "contain",
+                marginBottom: "4px",
+                display: "block",
+                marginLeft: "auto",
+                marginRight: "auto",
+              }}
+            />
+            <div>President/Secretary</div>
+          </div>
         </div>
       </div>
     );
@@ -1438,6 +1397,36 @@ const AddMember = () => {
                     formikStep1.errors.membership_id && (
                       <div className="text-red-500 text-xs mt-1">
                         {formikStep1.errors.membership_id}
+                      </div>
+                    )}
+                </div>
+
+                {/* Receipt Number (optional — auto-generated if left blank) */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Receipt No.
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    name="MembershipReceiptNo"
+                    placeholder="Leave blank to auto-generate"
+                    value={formikStep1.values.MembershipReceiptNo}
+                    onChange={(e) =>
+                      formikStep1.setFieldValue(
+                        "MembershipReceiptNo",
+                        e.target.value.replace(/\D/g, ""),
+                      )
+                    }
+                    onBlur={() =>
+                      formikStep1.setFieldTouched("MembershipReceiptNo", true)
+                    }
+                    className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm"
+                  />
+                  {formikStep1.touched.MembershipReceiptNo &&
+                    formikStep1.errors.MembershipReceiptNo && (
+                      <div className="text-red-500 text-xs mt-1">
+                        {formikStep1.errors.MembershipReceiptNo}
                       </div>
                     )}
                 </div>

@@ -25,12 +25,14 @@ export function SideBar({ prefix = "" }) {
   };
 
   return (
-    <div className="sidebar w-[350px] shadow-xl flex flex-col bg-[#EF742C]/90 min-h-screen">
-      <div className="p-6">
-        <div className="flex justify-center">
+    // Fixed full-height sidebar. The logo + nav list scroll internally so the
+    // Sign Out button stays pinned to the bottom no matter how many links there are.
+    <div className="sidebar w-[350px] shadow-xl flex flex-col bg-[#EF742C]/90 h-screen">
+      <div className="p-6 flex flex-col flex-1 min-h-0">
+        <div className="flex justify-center flex-shrink-0">
           <img src="/images/gruhakalpa.webp" className="w-[150px] h-[150px]" alt="Logo" />
         </div>
-        <ul className="mt-[35px] w-[326px]">
+        <ul className="mt-[35px] w-[326px] flex-1 min-h-0 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.55)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/50 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/70">
           <li className="mt-3">
             <Link
               to={`${prefix}/dashboard`}
@@ -144,12 +146,63 @@ export function SideBar({ prefix = "" }) {
               </span>
             </Link>
           </li>
+
+          <li className="mt-3">
+            <Link
+              to={`${prefix}/inwardoutward`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/inwardoutward`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/inwardoutward`) ? "/images/add_notes_green.svg" : "/images/add_notes.svg"}
+                alt="Payments"
+              />
+              <span className={isActive(`${prefix}/inwardoutward`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Inward / Outward
+              </span>
+            </Link>
+          </li>
+
+          <li className="mt-3">
+            <Link
+              to={`${prefix}/payments-due`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/payments-due`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/payments-due`) ? "/images/green_account_balance_wallet.svg" : "/images/payment_icon.svg"}
+                alt="Payments Due"
+              />
+              <span className={isActive(`${prefix}/payments-due`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Payments Due
+              </span>
+            </Link>
+          </li>
+
+          <li className="mt-3">
+            <Link
+              to={`${prefix}/bankstatement`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/bankstatement`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/bankstatement`) ? "/images/account_balance_green.svg" : "/images/account_balance_white.svg"}
+                alt="Bank Statement"
+              />
+              <span className={isActive(`${prefix}/bankstatement`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Bank Statement
+              </span>
+            </Link>
+          </li>
         </ul>
       </div>
 
-      {/* Sign Out — for both Admin and SuperAdmin at the bottom */}
+      {/* Sign Out — stays pinned at the bottom of the fixed-height sidebar */}
       <div
-        className="bg-white w-full p-4 mt-auto flex justify-center items-center cursor-pointer hover:bg-gray-100 transition-colors"
+        className="bg-white w-full p-4 flex-shrink-0 flex justify-center items-center cursor-pointer hover:bg-gray-100 transition-colors"
         onClick={handleSignOut}
       >
         <img src="/images/exit.svg" alt="Sign Out" />

@@ -1,13 +1,12 @@
-/* eslint-disable */
 import { useState, useEffect, useRef } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { Header } from "./Header";
-import { ChevronDown, Check, CircleX, Eye } from "lucide-react";
+import { ChevronDown, Check, Eye } from "lucide-react";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 // ── Projects Config (parity with SiteBookingForm) ──
 const PROJECTS = [
@@ -15,6 +14,19 @@ const PROJECTS = [
   { name: "New City", code: "NC" },
   { name: "Sri Sai Nagar", code: "SSN" },
 ];
+
+// ── Payment Type ──
+// A separate concern from Project Name. Project Name (below) always selects
+// one of the real projects and is used — exactly as for site payments — to
+// build/look up the member's CODE+YEAR+number membership id. Payment Type
+// decides whether this receipt is a normal site payment or a Fixed/Recurring
+// Deposit against that same member: deposits skip Site Dimension and the
+// Site Booking requirement (the member must exist, but no booking is needed),
+// and get their own receipt layout, numbering prefix, and category on the backend.
+const PAYMENT_CATEGORIES = ["Site Payment", "Fixed Deposit", "Recurring Deposit"];
+const isDepositCategory = (category) =>
+  category === "Fixed Deposit" || category === "Recurring Deposit";
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS_BACK = 2;
 const YEARS_FORWARD = 3;
@@ -32,13 +44,13 @@ const buildMembershipId = (projectCode, year, number) => {
 
 // Default form values
 const defaultFormData = {
-  societyName: "NAVANAGARA HOUSE BUILDING CO-OPERATIVE SOCIETY LTD.",
-  societyNameKannada: "ನವನಗರ ಹೌಸ್ ಬಿಲ್ಡಿಂಗ್ ಕೋ-ಆಪರೇಟಿವ್ ಸೊಸೈಟಿ ಲಿ.",
+  societyName: "THE GRUHAKALPA HOUSING CO-OPERATIVE SOCIETY LTD.",
+  societyNameKannada: "ದಿ ಗೃಹಕಲ್ಪ ಹೌಸಿಂಗ್ ಕೋ-ಆಪರೇಟಿವ್ ಸೊಸೈಟಿ ಲಿ.",
   societyAddress:
-    "No.1123, 'A' Block, 20th Cross, Sahakara Nagar, Bangalore - 560092",
-  regNo: "Reg. No: JRB/RGN/CR-04/51588/2024-2025",
-  website: "www.navanagarahousebuildingsociety.in",
-  email: "Email-navanagarahousingsociety@gmail.com",
+    "Parinidhi #23, E Block, 14th A Main Road, 2nd Floor,Sahakaranagar, Bangalore - 560092",
+  regNo: "Reg. No.: JRB/RGN/CR-04/51586/2023-2024 Date: 21/11/23",
+  website: "www.gruhakalpahousingsociety.in",
+  email: "Email: contact@gruhakalpahousingsociety.in",
   receiptNo: "",
   receiptDate: new Date().toISOString().split("T")[0],
   receivedFrom: "",
@@ -49,30 +61,21 @@ const defaultFormData = {
   flatNumber: "",
   projectType: PROJECTS[0].name,
   projectName: PROJECTS[0].name,
+  paymentCategory: PAYMENT_CATEGORIES[0], // "Site Payment" | "Fixed Deposit" | "Recurring Deposit"
   year: String(CURRENT_YEAR),
   seniorityNumber: "",
   paymentMode: "Cheque",
-  bankName: "State Bank Of India",
+  bankName: "",
   branch: "",
   chequeNo: "",
 };
 
-// Payment items list
-// Optional separate fees kept alongside the Enter-Amount waterfall.
-// These are NOT part of the down-payment / installment schedule — they are
-// added on top of whatever the entered amount is allocated to.
+
 const OPTIONAL_FEE_ITEMS = [
-  "Share",
-  "Membership Fee",
-  "Admission Fee",
-  "Share Fee",
   "Deposits",
   "Penalty",
-  "Miscellaneous",
 ];
 
-// Payment buckets that the entered amount waterfalls into, in order.
-// Down Payment first, then Installment 1..14 (matches SiteBookingForm schedule).
 const INSTALLMENT_PAYMENT_NAMES = [
   "Down Payment",
   ...Array.from({ length: 14 }, (_, i) => `Installment ${i + 1}`),
@@ -405,7 +408,7 @@ const CustomDatePicker = ({
 };
 
 const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
-  const [, setShowReceipt] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [paymentItemsError, setPaymentItemsError] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -417,6 +420,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const [memberAddresses, setMemberAddresses] = useState([]);
 
   // Numeric part the user types — full id is CODE + year + this (e.g. GK2026005)
+  // For Fixed/Recurring Deposit, this IS the full account number (e.g. 001, 00123).
   const [membershipInput, setMembershipInput] = useState("");
 
   // Created By retained internally (field removed from UI) — still sent in payload.
@@ -424,7 +428,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const [createdBy] = useState(ADMIN_NAMES[0]);
 
   const [transactionIds, setTransactionIds] = useState([""]);
-  const [selectedBanks, setSelectedBanks] = useState([{ bank: "State Bank Of India", branch: "" }]);
+  const [selectedBanks, setSelectedBanks] = useState([{ bank: "", branch: "" }]);
 
   // Single "Enter Amount" the admin types — waterfalls into DP + installments
   const [enteredAmount, setEnteredAmount] = useState("");
@@ -442,11 +446,13 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   );
 
   const paymentModes = ["Cheque", "Cash", "Online Transfer", "DD", "UPI", "NEFT/RTGS"];
-  const banks = [
-    "State Bank Of India", "HDFC Bank", "ICICI Bank", "Axis Bank",
-    "Punjab National Bank", "Bank of Baroda", "Canara Bank",
-    "Union Bank of India", "Kotak Mahindra Bank", "IndusInd Bank",
-  ];
+  const banks = ["HDFC Bank", "Apex Bank"];
+
+  // Fixed branch per bank — auto-filled and locked when a bank is selected.
+  const BANK_BRANCHES = {
+    "HDFC Bank": "RWF west colony, bangalore",
+    "Apex Bank": "sahakarnagar, bangalore",
+  };
 
   // Build option arrays for CustomSelect
   const paymentModeOptions = paymentModes.map((m) => ({ label: m, value: m }));
@@ -454,19 +460,12 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     { label: "Select Bank", value: "" },
     ...banks.map((b) => ({ label: b, value: b })),
   ];
+  // Project dropdown — real projects only, used to build/look up the membership id
   const projectOptions = PROJECTS.map((p) => ({ label: p.name, value: p.name }));
+  // Payment Type dropdown — Site Payment vs Fixed/Recurring Deposit
+  const paymentCategoryOptions = PAYMENT_CATEGORIES.map((c) => ({ label: c, value: c }));
 
-  // Transaction ID Handlers
-  const addTransactionId = () => {
-    if (transactionIds.length < 3) setTransactionIds([...transactionIds, ""]);
-  };
-  const removeTransactionId = (index) => {
-    if (transactionIds.length > 1) {
-      const updated = transactionIds.filter((_, i) => i !== index);
-      setTransactionIds(updated);
-      formik.setFieldValue("chequeNo", updated[0] || "");
-    }
-  };
+  // Transaction ID Handler (single)
   const updateTransactionId = (index, value) => {
     const updated = [...transactionIds];
     updated[index] = value;
@@ -474,21 +473,14 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     formik.setFieldValue("chequeNo", updated[0] || "");
   };
 
-  // Bank Handlers
-  const addBank = () => {
-    if (selectedBanks.length < 3) setSelectedBanks([...selectedBanks, { bank: "", branch: "" }]);
-  };
-  const removeBank = (index) => {
-    if (selectedBanks.length > 1) {
-      const updated = selectedBanks.filter((_, i) => i !== index);
-      setSelectedBanks(updated);
-      formik.setFieldValue("bankName", updated[0]?.bank || "");
-      formik.setFieldValue("branch", updated[0]?.branch || "");
-    }
-  };
+  // Bank Handler (single) — selecting a bank auto-fills its fixed branch
   const updateBankField = (index, field, value) => {
     const updated = [...selectedBanks];
-    updated[index][field] = value;
+    if (field === "bank") {
+      updated[index] = { bank: value, branch: BANK_BRANCHES[value] || "" };
+    } else {
+      updated[index][field] = value;
+    }
     setSelectedBanks(updated);
     formik.setFieldValue("bankName", updated[0]?.bank || "");
     formik.setFieldValue("branch", updated[0]?.branch || "");
@@ -524,6 +516,43 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       const membersResponse = await axios.get(`${API_BASE}/members`);
       const members = membersResponse.data.data || [];
       const memberFound = members.find((m) => m.membership_id === membershipId);
+
+      // Fixed/Recurring Deposit — same membership id as site payments, but no
+      // Site Booking is required. Auto-fill from the Member record only, skip
+      // the installment schedule/breakdown entirely (deposits are lump-sum).
+      if (isDeposit) {
+        if (!memberFound) {
+          setMemberExists(false);
+          setMemberValidationMessage("❌ Member not found. Please add member first in Members.");
+          setBookingBreakdown(null);
+          setPaidAmountsState({});
+          setMemberAddresses([]);
+          setIsCheckingMember(false);
+          return;
+        }
+        setMemberExists(true);
+        setHasExistingReceipt(false);
+        setBookingBreakdown(null);
+        setPaidAmountsState({});
+
+        if (memberFound.name) formik.setFieldValue("receivedFrom", memberFound.name);
+        if (memberFound.email) formik.setFieldValue("Email", memberFound.email);
+        const depositMobile =
+          memberFound.mobile ?? memberFound.mobilenumber ?? memberFound.mobile_number ?? "";
+        if (depositMobile) formik.setFieldValue("phoneNumber", String(depositMobile));
+
+        const depositAddresses = [];
+        if (memberFound.permanentaddress)
+          depositAddresses.push({ label: "Permanent Address", value: memberFound.permanentaddress });
+        if (memberFound.correspondenceaddress)
+          depositAddresses.push({ label: "Correspondence Address", value: memberFound.correspondenceaddress });
+        setMemberAddresses(depositAddresses);
+        if (depositAddresses.length > 0) formik.setFieldValue("flatNumber", depositAddresses[0].value);
+
+        setMemberValidationMessage("✅ Member found. Proceeding with deposit receipt.");
+        setIsCheckingMember(false);
+        return;
+      }
 
       const sitebookingsResponse = await axios.get(`${API_BASE}/sitebookings`);
       const sitebookings = sitebookingsResponse.data || [];
@@ -690,8 +719,11 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     Email: Yup.string().required("Email is required").email("Enter valid email"),
     flatNumber: Yup.string().required("Address is required").min(10, "Please provide complete address (minimum 10 characters)"),
     projectType: Yup.string().required("Project is required"),
+    paymentCategory: Yup.string().required("Payment type is required"),
     year: Yup.string().required("Year is required"),
-    // Same format as SiteBookingForm: CODE + 4-digit year + 3-4 digit number e.g. GK2026005
+    // Membership id format is the same for every payment type — CODE +
+    // 4-digit year + 3-4 digit number e.g. GK2026005 — since Fixed/Recurring
+    // Deposit receipts are issued against the same membership id as site payments.
     seniorityNumber: Yup.string()
       .required("Membership Id is required")
       .matches(/^[A-Z]{2,5}\d{4}\d{3,4}$/, "Invalid format (e.g., GK2026005)"),
@@ -723,13 +755,17 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     },
   });
 
+  // Whether the currently-selected Payment Type is a deposit (vs a site payment)
+  const isDeposit = isDepositCategory(formik.values.paymentCategory);
+
   // Address dropdown options
   const addressOptions = memberAddresses.map((addr) => ({
     label: `${addr.label}: ${addr.value}`,
     value: addr.value,
   }));
 
-  // Currently-selected project code (for the ID prefix)
+  // Currently-selected project code (for the ID prefix) — always resolved from
+  // the real project, same for site payments and deposits.
   const selectedProjectCode =
     PROJECTS.find((p) => p.name === formik.values.projectType)?.code || "";
 
@@ -739,6 +775,8 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   }, [formik.values.projectType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build full membership ID whenever number, project, or year changes ──
+  // Identical for site payments and deposits — a deposit is issued against
+  // the same CODE+YEAR+number membership id as any other payment.
   useEffect(() => {
     const project = PROJECTS.find((p) => p.name === formik.values.projectType);
     formik.setFieldValue(
@@ -747,7 +785,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     );
   }, [membershipInput, formik.values.projectType, formik.values.year]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Debounced member + receipt lookup once a complete number is entered ──
+  // ── Debounced member lookup once a complete number is entered ──
+  // Same lookup for site payments and deposits — checkMemberAndReceipts
+  // internally skips the Site Booking requirement when isDeposit is true.
   useEffect(() => {
     if (membershipInput && membershipInput.length >= 3) {
       const timer = setTimeout(() => {
@@ -758,14 +798,15 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       // Still typing / cleared — reset lookup state but keep manually-entered fields
       resetMemberState();
     }
-  }, [formik.values.seniorityNumber, membershipInput]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [formik.values.seniorityNumber, membershipInput, isDeposit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMembershipInputChange = (e) => {
-    // Only digits, max 4 (parity with SiteBookingForm)
+    // Only digits, max 4 (parity with SiteBookingForm) — same for deposits
     setMembershipInput(e.target.value.replace(/\D/g, "").slice(0, 4));
   };
 
   // ── Ordered buckets with due + already-paid (from previous receipts) ──
+  // Not used at all for deposits (no schedule/waterfall applies).
   const orderedBucketNames =
     paymentPlan === "full" ? [FULL_PAYMENT_BUCKET] : INSTALLMENT_PAYMENT_NAMES;
   const scheduleBuckets = orderedBucketNames.map((name) => {
@@ -791,8 +832,11 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   );
   const feesTotal = activeFees.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0);
 
-  // Grand total on this receipt = waterfall-allocated amount + optional fees
-  const allocatedTotal = previewAllocations.reduce((s, a) => s + a.amount, 0);
+  // Grand total on this receipt = amount allocated + optional fees.
+  // For deposits there's no waterfall — the entered amount IS the deposit.
+  const allocatedTotal = isDeposit
+    ? enteredNum
+    : previewAllocations.reduce((s, a) => s + a.amount, 0);
   const total = allocatedTotal + feesTotal;
 
   const validatePaymentItems = () => {
@@ -800,15 +844,17 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       setPaymentItemsError("Enter an amount (or select at least one fee) greater than zero");
       return false;
     }
-    if (enteredNum > 0 && allocatedTotal === 0) {
-      setPaymentItemsError("All installments are already fully paid — nothing left to allocate");
-      return false;
-    }
-    if (previewLeftover > 0) {
-      setPaymentItemsError(
-        `Amount exceeds the remaining schedule by ₹${previewLeftover.toLocaleString("en-IN")}. Reduce the amount.`,
-      );
-      return false;
+    if (!isDeposit) {
+      if (enteredNum > 0 && allocatedTotal === 0) {
+        setPaymentItemsError("All installments are already fully paid — nothing left to allocate");
+        return false;
+      }
+      if (previewLeftover > 0) {
+        setPaymentItemsError(
+          `Amount exceeds the remaining schedule by ₹${previewLeftover.toLocaleString("en-IN")}. Reduce the amount.`,
+        );
+        return false;
+      }
     }
     setPaymentItemsError("");
     return true;
@@ -848,13 +894,18 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
 
   const handleDownloadPDF = async () => {
     if (!memberExists) {
-      toast.error("❌ Member not found! Please add the member in Members or Site Booking first.");
+      toast.error(
+        isDeposit
+          ? "❌ Member not found! Please add the member in Members first."
+          : "❌ Member not found! Please add the member in Members or Site Booking first.",
+      );
       return;
     }
     const errors = await formik.validateForm();
     formik.setTouched({
       receiptNo: true, receiptDate: true, receivedFrom: true, phoneNumber: true,
       Email: true, flatNumber: true, seniorityNumber: true, bankName: true, branch: true, chequeNo: true,
+      projectType: true, paymentCategory: true, year: true,
     });
     if (Object.keys(errors).length === 0 && validatePaymentItems()) {
       try {
@@ -866,7 +917,10 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
         const { createRoot } = await import("react-dom/client");
         const root = createRoot(container);
         document.body.appendChild(container);
-        await new Promise((resolve) => { root.render(<ReceiptContent />); setTimeout(resolve, 800); });
+        await new Promise((resolve) => {
+          root.render(isDeposit ? <DepositReceiptContent /> : <ReceiptContent />);
+          setTimeout(resolve, 800);
+        });
         const canvas = await html2canvas(container, {
           scale: 6, useCORS: true, allowTaint: true, logging: false, backgroundColor: "#ffffff", width: 794, x: -4, y: -4,
         });
@@ -876,17 +930,28 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         pdf.addImage(imgData, "PNG", 1, 1, 208, 295);
         const projectPart = (formik.values.projectType || "").replace(/[^a-zA-Z0-9]/g, "_");
+        const categoryPart = isDeposit
+          ? (formik.values.paymentCategory === "Fixed Deposit" ? "FD" : "RD")
+          : "";
         const seniorityPart = (formik.values.seniorityNumber || "").replace(/[^a-zA-Z0-9]/g, "_");
-        const filename = `${projectPart}_${seniorityPart}.pdf`;
+        const filename = isDeposit
+          ? `${categoryPart}_${projectPart}_${seniorityPart}.pdf`
+          : `${projectPart}_${seniorityPart}.pdf`;
         const pdfBase64 = pdf.output("datauristring").split(",")[1];
 
         // This receipt's rows: waterfall allocations + any optional fees
+        // (for deposits: a single row for the deposit amount + any fees)
         const feeAllocations = activeFees.map((f) => ({
           bucket: f.name,
           label: f.name,
           amount: Math.round(parseFloat(f.amount) || 0),
         }));
-        const allAllocations = [...previewAllocations, ...feeAllocations];
+        const depositAllocation = isDeposit && enteredNum > 0
+          ? [{ bucket: formik.values.paymentCategory, label: formik.values.paymentCategory, amount: enteredNum }]
+          : [];
+        const allAllocations = isDeposit
+          ? [...depositAllocation, ...feeAllocations]
+          : [...previewAllocations, ...feeAllocations];
         const paymentTypeStr = allAllocations.map((a) => a.label).join(", ");
 
         try {
@@ -894,7 +959,13 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             receiptNo: formik.values.receiptNo,
             membershipid: formik.values.seniorityNumber,
             name: formik.values.receivedFrom,
-            projectname: formik.values.projectType,
+            // Deposits still use a real project to build the membership id, but
+            // the receipt's own "project" is NA — deposits aren't tied to a site.
+            projectname: isDeposit ? "NA" : formik.values.projectType,
+            deposittype: isDeposit ? formik.values.paymentCategory : undefined,
+            paymentcategory: isDeposit
+              ? (formik.values.paymentCategory === "Fixed Deposit" ? "fixed_deposit" : "recurring_deposit")
+              : "site",
             date: formik.values.receiptDate,
             amountpaid: total,
             mobilenumber: formik.values.phoneNumber,
@@ -903,7 +974,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             paymenttype: paymentTypeStr,
             allocations: allAllocations,
             transactionid: transactionIds.filter(Boolean).join(", "),
-            dimension: formik.values.siteDimension || "N/A",
+            dimension: isDeposit ? "" : (formik.values.siteDimension || "N/A"),
             bank: selectedBanks.map((b) => b.bank).filter(Boolean).join(", "),
             created_by: createdBy,
             pdfBase64,
@@ -933,16 +1004,23 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const amountInWords = numberToWords(total);
 
   // Rows shown on the printed receipt = this payment's waterfall split + fees
-  const receiptRows = [
-    ...previewAllocations.map((a) => ({ name: a.label, amount: a.amount })),
-    ...activeFees.map((f) => ({ name: f.name, amount: Math.round(parseFloat(f.amount) || 0) })),
-  ];
+  // (deposits: a single row for the deposit type + any fees)
+  const receiptRows = isDeposit
+    ? [
+        ...(enteredNum > 0 ? [{ name: formik.values.paymentCategory, amount: enteredNum }] : []),
+        ...activeFees.map((f) => ({ name: f.name, amount: Math.round(parseFloat(f.amount) || 0) })),
+      ]
+    : [
+        ...previewAllocations.map((a) => ({ name: a.label, amount: a.amount })),
+        ...activeFees.map((f) => ({ name: f.name, amount: Math.round(parseFloat(f.amount) || 0) })),
+      ];
 
+  // ── Existing site-project receipt layout (table-heavy, government-style) ──
   const ReceiptContent = () => (
     <div style={{ border: "2px solid #000000", backgroundColor: "#ffffff", padding: "20px", fontFamily: "Arial, sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", height: "150px", borderBottom: "2px solid #000000", paddingBottom: "15px", marginTop: "0px", marginBottom: "16px", marginLeft: "-20px", marginRight: "-20px", paddingLeft: "10px", gap: "10px" }}>
         <div style={{ flexShrink: 0 }}>
-          <img src={"/images/logoblack.webp"} alt="Logo" style={{ width: "150px", height: "140px", marginBottom: "15px", objectFit: "contain" }} />
+          <img src={"/images/bg-removed-logo.webp"} alt="Logo" style={{ width: "160px", height: "140px", marginBottom: "15px", objectFit: "contain" }} />
         </div>
         <div style={{ flex: 1, textAlign: "center" }}>
           <div style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>{formik.values.societyNameKannada}</div>
@@ -1031,12 +1109,187 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       <div style={{ fontSize: "11px", fontStyle: "italic", marginBottom: "32px" }}>
         *If 30% of the booking amount is not paid within 20 days from the date of booking, 10% penalty apply.
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginTop: "40px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", fontSize: "13px", marginTop: "40px" }}>
         <div>Party's Signature</div>
-        <div>President/Secretary</div>
+        <div style={{ textAlign: "center" }}>
+          <img
+            src={"/images/president-signature.webp"}
+            alt="President/Secretary Signature"
+            style={{ height: "55px", objectFit: "contain", marginBottom: "4px", display: "block", marginLeft: "auto", marginRight: "auto" }}
+          />
+          <div>President/Secretary</div>
+        </div>
       </div>
     </div>
   );
+
+  // ── Fixed Deposit / Recurring Deposit letterhead receipt ──
+  // Paragraph-style "PAYMENT RECEIPT" replicating the production letterhead:
+  // logo + society name + QR code header, red rule, centered title with
+  // Receipt No/Date stamped top-right, a plain-language paragraph describing
+  // the payment (no table, no "Received with thanks from", no boxed title),
+  // and a faint centered watermark of the society logo behind the text.
+  const DepositReceiptContent = () => {
+    // Top-right timestamp = when this PDF was generated (matches the
+    // "Date: 24-Nov-25 11:11:22" stamp style in the reference receipt).
+    const formatDateTime = (d) => {
+      const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = monthsShort[d.getMonth()];
+      const year = String(d.getFullYear()).slice(-2);
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      return `${day}-${month}-${year} ${hh}:${mm}:${ss}`;
+    };
+    // Payment date line inside the paragraph — the receipt date field only
+    // captures a date, so time is stamped 00:00:00 (matches reference).
+    const formatPaymentDate = (dateString) => {
+      const d = new Date(dateString);
+      const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = monthsShort[d.getMonth()];
+      return `${day}-${month}-${d.getFullYear()} 00:00:00`;
+    };
+
+    const qrValue = JSON.stringify({
+      receiptNo: formik.values.receiptNo,
+      account: formik.values.seniorityNumber,
+      amount: total,
+      type: formik.values.paymentCategory,
+    });
+
+    // Any optional fees (Deposits / Penalty) get folded into a short
+    // parenthetical rather than a separate table row.
+    const feeNote =
+      activeFees.length > 0
+        ? ` (includes ${activeFees
+            .map((f) => `${f.name}: ₹${Math.round(parseFloat(f.amount) || 0).toLocaleString("en-IN")}`)
+            .join(", ")})`
+        : "";
+
+    const hasTransactionRef = formik.values.paymentMode !== "Cash" && transactionIds[0];
+
+    return (
+      <div
+        style={{
+          position: "relative",
+          backgroundColor: "#ffffff",
+          fontFamily: "Arial, sans-serif",
+          overflow: "hidden",
+          width: "786px",
+          minHeight: "1113px",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* width/minHeight match the A4 aspect ratio (210×297mm) at the same
+            786px capture width the site receipt uses, so html2canvas grabs a
+            canvas already shaped like a page. The flex column below spreads
+            the letter's own spacing across that full height and pins the
+            closing rule to the bottom — nothing is scaled or stretched,
+            the whitespace is just distributed on purpose instead of being
+            dumped in one block underneath the signature. */}
+        {/* Watermark — faint centered society logo behind all text */}
+        <div
+          style={{
+            position: "absolute",
+            top: "48%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            opacity: 0.07,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          <img
+            src={"/images/bg-removed-logo.webp"}
+            alt=""
+            style={{ width: "380px", height: "380px", objectFit: "contain" }}
+          />
+        </div>
+
+        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1 }}>
+          {/* Header: logo — society name/address/reg — QR code */}
+          <div style={{ display: "flex", alignItems: "center", gap: "18px", padding: "28px 26px 22px" }}>
+            <img
+              src={"/images/bg-removed-logo.webp"}
+              alt="Logo"
+              style={{ width: "110px", height: "110px", objectFit: "contain", flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "3px" }}>
+                {formik.values.societyName}
+              </div>
+              <div style={{ fontSize: "11px", marginBottom: "3px" }}>
+                (Governed by Karnataka Government Co-operative Societies Act)
+              </div>
+              <div style={{ fontSize: "10px", marginBottom: "2px" }}>{formik.values.regNo}</div>
+              <div style={{ fontSize: "10px" }}>{formik.values.societyAddress}</div>
+            </div>
+            <div style={{ width: "96px", flexShrink: 0, display: "flex", justifyContent: "center" }}>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=124x124&data=${encodeURIComponent(qrValue)}`}
+                alt="QR"
+                crossOrigin="anonymous"
+                style={{ width: "90px", height: "90px", objectFit: "contain" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ borderTop: "3px solid #C0392B", margin: "0 22px" }} />
+
+          {/* Title + receipt meta stamped top-right */}
+          <div style={{ position: "relative", padding: "20px 22px 0" }}>
+            <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "16px", letterSpacing: "0.5px" }}>
+              PAYMENT RECEIPT
+            </div>
+            <div style={{ position: "absolute", top: "20px", right: "22px", textAlign: "right", fontSize: "10px", color: "#2b2b2b", fontWeight: "600" }}>
+              <div>Receipt No: {formik.values.receiptNo}</div>
+              <div>Date: {formatDateTime(new Date())}</div>
+            </div>
+          </div>
+
+          {/* Body paragraph — generous letter-style rhythm instead of a table */}
+          <div style={{ padding: "50px 46px 0", fontSize: "13.5px", lineHeight: "2.2" }}>
+            <div style={{ marginBottom: "30px" }}>
+              Dear <strong>{formik.values.receivedFrom}</strong>,
+            </div>
+            <div style={{ marginBottom: "26px" }}>
+              This receipt acknowledges your payment of Rs. {total.toLocaleString("en-IN")} (
+              <strong>{amountInWords} Rupees</strong> only) to the society, towards{" "}
+              <strong>{formik.values.paymentCategory}</strong>.{feeNote}
+            </div>
+            <div style={{ marginBottom: "26px" }}>Project Name: NA</div>
+            <div style={{ marginBottom: "26px" }}>
+              Your membership ID <strong>{formik.values.seniorityNumber}</strong> has been credited accordingly.
+            </div>
+            <div style={{ marginBottom: "26px" }}>
+              The payment was processed via <strong>{formik.values.paymentMode}</strong>
+              {hasTransactionRef ? (
+                <> and the transaction reference number is <strong>{transactionIds[0]}</strong>.</>
+              ) : (
+                "."
+              )}{" "}
+              on {formatPaymentDate(formik.values.receiptDate)}
+            </div>
+            <div style={{ marginBottom: "56px" }}>Thank you for your continued support and contributions.</div>
+            <div>Sincerely,</div>
+            <div style={{ marginTop: "56px" }}>Sd/-</div>
+            <div>Secretary</div>
+          </div>
+
+          {/* Spacer fills whatever room is left so the signature block still
+              sits comfortably within the page, regardless of content length. */}
+          <div style={{ flexGrow: 1 }} />
+
+          {/* margin-y-10 (40px top/bottom) breathing room below the signature —
+              no closing line here anymore. */}
+          <div style={{ marginTop: "40px", marginBottom: "40px" }} />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -1072,7 +1325,6 @@ body { background: white !important; }
                     value={formik.values.receiptNo}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    placeholder="e.g., RCP/2024/001"
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
                       formik.touched.receiptNo && formik.errors.receiptNo
                         ? "border-orange-500 focus:ring-orange-500"
@@ -1084,7 +1336,8 @@ body { background: white !important; }
                   )}
                 </div>
 
-                {/* Project Name — selectable */}
+                {/* Project Name — always a real project; used to build/look up the membership id
+                    the same way for site payments and deposits. */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Project Name <span className="text-red-500">*</span>
@@ -1092,7 +1345,12 @@ body { background: white !important; }
                   <CustomSelect
                     options={projectOptions}
                     value={formik.values.projectType}
-                    onChange={(val) => formik.setFieldValue("projectType", val)}
+                    onChange={(val) => {
+                      formik.setFieldValue("projectType", val);
+                      // Clear the typed number when switching projects so a
+                      // stale value can't slip through validation.
+                      setMembershipInput("");
+                    }}
                     onBlur={() => formik.setFieldTouched("projectType", true)}
                     placeholder="Select Project"
                   />
@@ -1104,7 +1362,24 @@ body { background: white !important; }
                   )}
                 </div>
 
-                {/* Year — selectable */}
+                {/* Payment Type — Site Payment vs Fixed/Recurring Deposit against the same member */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Payment Type <span className="text-red-500">*</span>
+                  </label>
+                  <CustomSelect
+                    options={paymentCategoryOptions}
+                    value={formik.values.paymentCategory}
+                    onChange={(val) => formik.setFieldValue("paymentCategory", val)}
+                    onBlur={() => formik.setFieldTouched("paymentCategory", true)}
+                    placeholder="Select Payment Type"
+                  />
+                  {formik.touched.paymentCategory && formik.errors.paymentCategory && (
+                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.paymentCategory}</p>
+                  )}
+                </div>
+
+                {/* Year — selectable, same for site payments and deposits */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Year <span className="text-red-500">*</span>
@@ -1121,7 +1396,7 @@ body { background: white !important; }
                   )}
                 </div>
 
-                {/* Membership Id — prefix (CODE + year) + numeric input */}
+                {/* Membership Id — CODE+YEAR+number, identical for site payments and deposits */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Membership Id <span className="text-red-500">*</span>
@@ -1134,7 +1409,6 @@ body { background: white !important; }
                       type="text"
                       value={membershipInput}
                       onChange={handleMembershipInputChange}
-                      placeholder="001"
                       maxLength="4"
                       className="flex-1 px-3 py-1.5 text-sm focus:outline-none bg-white"
                     />
@@ -1145,7 +1419,9 @@ body { background: white !important; }
                     )}
                   </div>
                   {formik.values.seniorityNumber && (
-                    <p className="text-xs text-blue-600 font-semibold mt-1">Generated: {formik.values.seniorityNumber}</p>
+                    <p className="text-xs text-blue-600 font-semibold mt-1">
+                      Generated: {formik.values.seniorityNumber}
+                    </p>
                   )}
                   {memberValidationMessage && !isCheckingMember && (
                     <div className={`mt-1 p-2 border rounded-md ${
@@ -1176,7 +1452,6 @@ body { background: white !important; }
                     value={formik.values.receivedFrom}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    placeholder="Auto-filled from database"
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
                       formik.touched.receivedFrom && formik.errors.receivedFrom
                         ? "border-red-500 focus:ring-orange-500"
@@ -1207,7 +1482,6 @@ body { background: white !important; }
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Transaction ID <span className="text-red-500">*</span>
-                      <span className="text-gray-400 ml-1">(max 3)</span>
                     </label>
                     {transactionIds.map((tid, index) => (
                       <div key={index} className="flex gap-2 mb-2">
@@ -1215,19 +1489,10 @@ body { background: white !important; }
                           type="text"
                           value={tid}
                           onChange={(e) => updateTransactionId(index, e.target.value)}
-                          placeholder={`Transaction ID ${index + 1}`}
                           className="w-[340px] px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
                         />
-                        {transactionIds.length > 1 && (
-                          <button type="button" onClick={() => removeTransactionId(index)} className="px-3 py-1.5 text-sm bg-red-100 text-red-600 rounded-md hover:bg-red-200">✕</button>
-                        )}
                       </div>
                     ))}
-                    {transactionIds.length < 3 && (
-                      <button type="button" onClick={addTransactionId} className="text-xs text-[#EF742C] hover:text-orange-700 font-medium">
-                        + Add Transaction ID
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -1239,27 +1504,27 @@ body { background: white !important; }
                   <input type="text" value={`₹${total.toLocaleString()}`} readOnly className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 focus:outline-none" />
                 </div>
 
-                {/* Site Dimension */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Site Dimension</label>
-                  <input
-                    type="text"
-                    name="siteDimension"
-                    value={formik.values.siteDimension}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    placeholder="e.g., 30x40"
-                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Auto-filled from Site Booking if available</p>
-                </div>
+                {/* Site Dimension — hidden for Fixed/Recurring Deposit */}
+                {!isDeposit && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Site Dimension</label>
+                    <input
+                      type="text"
+                      name="siteDimension"
+                      value={formik.values.siteDimension}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Auto-filled from Site Booking if available</p>
+                  </div>
+                )}
 
                 {/* Bank & Branch — CustomSelect */}
                 {formik.values.paymentMode !== "Cash" && (
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Bank & Branch <span className="text-red-500">*</span>
-                      <span className="text-gray-400 ml-1">(max 3)</span>
                     </label>
                     {selectedBanks.map((bankEntry, index) => (
                       <div key={index} className="flex gap-2 mb-2 items-start">
@@ -1275,21 +1540,12 @@ body { background: white !important; }
                           <input
                             type="text"
                             value={bankEntry.branch}
-                            onChange={(e) => updateBankField(index, "branch", e.target.value)}
-                            placeholder="Enter branch name"
-                            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
+                            readOnly
+                            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
                           />
                         </div>
-                        {selectedBanks.length > 1 && (
-                          <button type="button" onClick={() => removeBank(index)} className="px-3 py-1.5 text-sm bg-red-100 text-red-600 rounded-md hover:bg-red-200">
-                            <CircleX size={18} />
-                          </button>
-                        )}
                       </div>
                     ))}
-                    {selectedBanks.length < 3 && (
-                      <button type="button" onClick={addBank} className="text-xs text-[#EF742C] hover:text-orange-700 font-medium">+ Add Bank</button>
-                    )}
                   </div>
                 )}
 
@@ -1304,7 +1560,6 @@ body { background: white !important; }
                     value={formik.values.phoneNumber}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    placeholder="Auto-filled from database"
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
                       formik.touched.phoneNumber && formik.errors.phoneNumber ? "border-red-500 focus:ring-orange-500" : "border-gray-300 focus:ring-orange-500"
                     }`}
@@ -1325,7 +1580,6 @@ body { background: white !important; }
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     value={formik.values.Email}
-                    placeholder="Auto-filled from database"
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
                       formik.touched.Email && formik.errors.Email ? "border-red-500 focus:ring-orange-500" : "border-gray-300 focus:ring-orange-500"
                     }`}
@@ -1363,7 +1617,6 @@ body { background: white !important; }
                         options={addressOptions}
                         value={formik.values.flatNumber}
                         onChange={(val) => formik.setFieldValue("flatNumber", val)}
-                        placeholder="— Select a saved address —"
                       />
                     </div>
                   )}
@@ -1387,7 +1640,7 @@ body { background: white !important; }
                 </div>
               </div>
 
-              {/* Enter Amount — waterfall into Down Payment + Installments */}
+              {/* Enter Amount — waterfall into Down Payment + Installments (site only) */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-800 mb-2">
                   Enter Amount <span className="text-red-500">*</span>
@@ -1405,14 +1658,18 @@ body { background: white !important; }
                     min="0"
                     value={enteredAmount}
                     onChange={(e) => { setEnteredAmount(e.target.value); setPaymentItemsError(""); }}
-                    disabled={!bookingBreakdown}
-                    placeholder={bookingBreakdown ? "Amount received from client" : "Enter Membership Id first"}
+                    disabled={!isDeposit && !bookingBreakdown}
+                    placeholder={
+                      isDeposit
+                        ? `Amount for this ${formik.values.paymentCategory}`
+                        : bookingBreakdown ? "Amount received from client" : "Enter Membership Id first"
+                    }
                     className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:bg-gray-100"
                   />
                 </div>
 
-                {/* How this amount is being allocated (live preview) */}
-                {bookingBreakdown && previewAllocations.length > 0 && (
+                {/* How this amount is being allocated (live preview) — site only */}
+                {!isDeposit && bookingBreakdown && previewAllocations.length > 0 && (
                   <div className="mb-3 p-3 rounded-md bg-orange-50 border border-orange-200">
                     <p className="text-[10px] text-[#EF742C] mb-2 font-semibold uppercase tracking-wide">
                       This payment will be recorded as
@@ -1433,8 +1690,21 @@ body { background: white !important; }
                   </div>
                 )}
 
-                {/* Full schedule: every bucket with due / paid / remaining */}
-                {bookingBreakdown && (
+                {/* Deposit preview — simple single-line confirmation */}
+                {isDeposit && enteredNum > 0 && (
+                  <div className="mb-3 p-3 rounded-md bg-orange-50 border border-orange-200">
+                    <p className="text-[10px] text-[#EF742C] mb-2 font-semibold uppercase tracking-wide">
+                      This payment will be recorded as
+                    </p>
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold text-gray-700">{formik.values.paymentCategory}</span>
+                      <span className="font-semibold text-[#EF742C]">₹{enteredNum.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Full schedule: every bucket with due / paid / remaining — site only */}
+                {!isDeposit && bookingBreakdown && (
                   <div className="border border-gray-200 rounded-md p-2 mb-3">
                     <p className="text-[10px] text-gray-400 mb-2 font-medium uppercase tracking-wide">{paymentPlan === "full" ? "Full Payment" : "Payment Schedule"}</p>
                     <div className="flex flex-col gap-1.5">
@@ -1571,7 +1841,7 @@ body { background: white !important; }
               </div>
               <div className="overflow-y-auto flex-1 p-6 bg-gray-100">
                 <div style={{ width: "210mm", minHeight: "297mm", margin: "0 auto", backgroundColor: "#ffffff", padding: "6px 6px", boxSizing: "border-box", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
-                  <ReceiptContent />
+                  {isDeposit ? <DepositReceiptContent /> : <ReceiptContent />}
                 </div>
               </div>
             </div>

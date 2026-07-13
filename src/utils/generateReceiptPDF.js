@@ -8,7 +8,7 @@
  *      ReceiptForm layout via html2canvas + jsPDF
  */
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 // ─── Helpers for fallback re-generation ──────────────────────────────────────
 
@@ -194,9 +194,9 @@ const buildReceiptHTML = (receipt) => {
 
 export const generateReceiptPDF = async (receipt) => {
   const projectPart = (receipt.projectname || "").replace(/[^a-zA-Z0-9]/g, "_");
-  const seniorityPart = (receipt.seniority_no || "").replace(/[^a-zA-Z0-9]/g, "_");
+  const idPart = (receipt.membershipid || receipt.seniority_no || "").replace(/[^a-zA-Z0-9]/g, "_");
   const receiptPart = (receipt.receipt_no || "draft").replace(/[^a-zA-Z0-9]/g, "_");
-  const filename = `${projectPart}_${seniorityPart}_${receiptPart}.pdf`;
+  const filename = `${projectPart}_${idPart}_${receiptPart}.pdf`;
 
   // ── Strategy 1: Backend proxy-streams the PDF — no Cloudinary 401 issues ────
   try {

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 const schema = Yup.object({
   username: Yup.string().trim().required("Username is required"),
@@ -61,8 +61,8 @@ export function SuperAdmin() {
   });
 
   const fieldBase =
-    "w-full rounded-xl bg-[#F0EDFFCC] px-14 py-3 text-md outline-none ring-1 ring-transparent " +
-    "focus:bg-white focus:ring-indigo-200 transition placeholder:text-[#1C1C1C]";
+    "w-full rounded-xl bg-red-50 px-14 py-3 text-md outline-none ring-1 ring-transparent " +
+    "focus:bg-white focus:ring-orange-200 transition placeholder:text-[#1C1C1C]";
 
   return (
     <div>
@@ -72,7 +72,7 @@ export function SuperAdmin() {
           <div className="flex gap-[120px]">
             <img
               className="lg:w-[450px] lg:h-[480px]"
-              src="/images/admin_login_img.webp"
+              src="/images/admin_image.webp"
               alt="Super Admin Login"
             />
             <div className="p-8 md:p-12 flex items-center">
@@ -131,7 +131,7 @@ export function SuperAdmin() {
                       type="submit"
                       disabled={isLoading}
                       className="w-44 mx-auto block rounded-2xl py-3 text-[16px] font-semibold text-white
-                      bg-gradient-to-r from-[#FFFF00] via-[#7158B6] to-[#7158B6]
+                      bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600
                       hover:brightness-105 active:scale-[0.99] transition
                       disabled:opacity-50 disabled:cursor-not-allowed"
                     >

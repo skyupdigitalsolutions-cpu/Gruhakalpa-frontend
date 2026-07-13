@@ -8,7 +8,7 @@ import { toast } from "react-toastify";
 
 // FIXED BASE URL (works local + production)
 const API_BASE =
-  process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+  process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 const schema = Yup.object({
   username: Yup.string().trim().required("Username is required"),

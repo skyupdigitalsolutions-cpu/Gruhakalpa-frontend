@@ -1,9 +1,9 @@
-/* eslint-disable */
 import { useEffect, useRef, useState } from "react";
 import axiosInstance from "../api/axios";
 import { Header } from "../components/Header";
 import BookingOverview from "../components/BookingOverview";
 import PaymentTable from "../components/PaymentTable";
+import { UpcomingPaymentsWidget } from "../components/UpcomingPaymentsWidget";
 import { ChevronDown, Check } from "lucide-react";
 
 export function Dashboard() {
@@ -21,6 +21,8 @@ export function Dashboard() {
   const [availableMonths, setAvailableMonths] = useState([]);
   const [totalBookedAmount, setTotalBookedAmount] = useState(0);
   const [totalPaidAmount, setTotalPaidAmount] = useState(0);
+  const [totalPenalty, setTotalPenalty] = useState(0);
+  const [cancelledCount, setCancelledCount] = useState(0);
 
   // ── Animated dropdown state ──
   const [open, setOpen] = useState(false);
@@ -182,6 +184,14 @@ export function Dashboard() {
         setTotalBookedAmount(
           bookings.reduce((sum, b) => sum + Number(b.totalamount || 0), 0),
         );
+        const cancelled = bookings.filter((b) => b.cancelled);
+        setCancelledCount(cancelled.length);
+        setTotalPenalty(
+          cancelled.reduce(
+            (sum, b) => sum + Number(b.cancellationPenalty || 0),
+            0,
+          ),
+        );
         console.log("✅ Site Bookings fetched:", bookings.length);
       })
       .catch((error) =>
@@ -319,15 +329,15 @@ export function Dashboard() {
         </div>
 
         {/* ── Stat Cards ── */}
-        <div className="flex flex-col lg:flex-row gap-[20px] pt-[24px]">
-          <div className="lg:w-[235px] lg:h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
+        <div className="flex flex-col lg:flex-row lg:flex-wrap gap-[20px] pt-[24px]">
+          <div className="flex-1 min-w-[210px] min-h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
             <div className="px-[20px] flex py-[16px]">
-              <div className="h-[57px] w-[4px] bg-[#08A25C] rounded-lg"></div>
-              <div className="px-[20px]">
-                <div className="text-[18px] text-[#EF742C] font-semibold">
+              <div className="h-[57px] w-[4px] shrink-0 bg-[#08A25C] rounded-lg"></div>
+              <div className="px-[20px] min-w-0">
+                <div className="text-[16px] text-[#EF742C] font-semibold">
                   Total Member
                 </div>
-                <div className="font-bold text-[30px]">
+                <div className="font-bold text-[30px] leading-tight break-words">
                   {filteredData.members}
                 </div>
                 <p className="text-[14px] text-[#9B9A9A]">
@@ -339,14 +349,14 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="lg:w-[235px] lg:h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
+          <div className="flex-1 min-w-[210px] min-h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
             <div className="px-[20px] flex py-[16px]">
-              <div className="h-[57px] w-[4px] bg-[#08A25C] rounded-lg"></div>
-              <div className="px-[20px]">
-                <div className="text-[18px] font-semibold text-[#EF742C]">
+              <div className="h-[57px] w-[4px] shrink-0 bg-[#08A25C] rounded-lg"></div>
+              <div className="px-[20px] min-w-0">
+                <div className="text-[16px] font-semibold text-[#EF742C]">
                   Site Booking
                 </div>
-                <div className="font-bold text-[30px]">
+                <div className="font-bold text-[30px] leading-tight break-words">
                   {filteredData.bookings}
                 </div>
                 <p className="text-[14px] text-[#9B9A9A]">
@@ -358,14 +368,14 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="lg:w-[235px] lg:h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
+          <div className="flex-1 min-w-[210px] min-h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
             <div className="px-[20px] flex py-[16px]">
-              <div className="h-[57px] w-[4px] bg-[#08A25C] rounded-lg"></div>
-              <div className="px-[20px]">
-                <div className="text-[18px] font-semibold text-[#EF742C]">
+              <div className="h-[57px] w-[4px] shrink-0 bg-[#08A25C] rounded-lg"></div>
+              <div className="px-[20px] min-w-0">
+                <div className="text-[16px] font-semibold text-[#EF742C]">
                   Total Receipt
                 </div>
-                <div className="font-bold text-[30px]">
+                <div className="font-bold text-[30px] leading-tight break-words">
                   {filteredData.receipts}
                 </div>
                 <p className="text-[14px] text-[#9B9A9A]">
@@ -377,14 +387,14 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="lg:w-[235px] lg:h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
+          <div className="flex-1 min-w-[210px] min-h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
             <div className="px-[20px] flex py-[16px]">
-              <div className="h-[57px] w-[4px] bg-[#08A25C] rounded-lg"></div>
-              <div className="px-[20px]">
-                <div className="text-[18px] font-semibold text-[#EF742C]">
+              <div className="h-[57px] w-[4px] shrink-0 bg-[#08A25C] rounded-lg"></div>
+              <div className="px-[20px] min-w-0">
+                <div className="text-[16px] font-semibold text-[#EF742C]">
                   Transaction
                 </div>
-                <div className="font-bold text-[24px]">
+                <div className="font-bold text-[24px] leading-tight break-words">
                   ₹{filteredData.amount.toLocaleString("en-IN")}
                 </div>
                 <p className="text-[14px] text-[#9B9A9A]">
@@ -395,7 +405,28 @@ export function Dashboard() {
               </div>
             </div>
           </div>
+
+          <div className="flex-1 max-w-[300px] min-h-[119px] bg-[#FFFF] shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.1),0_4px_5px_-1px_rgba(0,0,0,0.1)] rounded-xl">
+            <div className="px-[20px] flex py-[16px]">
+              <div className="h-[57px] w-[4px] shrink-0 bg-red-500 rounded-lg"></div>
+              <div className="px-[20px] min-w-0">
+                <div className="text-[16px] font-semibold text-red-500">
+                  Penalty Amount
+                </div>
+                <div className="font-bold text-[24px] leading-tight break-words">
+                  ₹{totalPenalty.toLocaleString("en-IN")}
+                </div>
+                <p className="text-[14px] text-[#9B9A9A]">
+                  {cancelledCount} cancelled
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="flex">
+        <UpcomingPaymentsWidget prefix="" />
       </div>
 
       <div className="flex">

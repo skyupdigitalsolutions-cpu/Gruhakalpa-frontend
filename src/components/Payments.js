@@ -2,7 +2,17 @@ import axios from "axios";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Header } from "./Header";
 
-const API_BASE = process.env.REACT_APP_API_BASE || "https://gruhakalpa-api.skyupdigitalsolutions.workers.dev";
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
+
+// Indian financial year: April 1 – March 31.
+// A date in Jan–Mar belongs to the FY that started the previous April.
+const getFinancialYear = (dateStr) => {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const y = d.getFullYear();
+  const startYear = d.getMonth() >= 3 ? y : y - 1; // month 3 = April
+  return `${startYear}-${startYear + 1}`;
+};
 
 export default function Payments() {
   const [tableData, setTableData] = useState([]);
@@ -10,6 +20,11 @@ export default function Payments() {
   const [filterType, setFilterType] = useState("All");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // New: financial-year + manual date-range filters
+  const [financialYear, setFinancialYear] = useState("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const headers = [
     "Date",
@@ -43,18 +58,60 @@ export default function Payments() {
     return [...new Set(tableData.map((r) => r.paymenttype).filter(Boolean))];
   }, [tableData]);
 
+  // All financial years present in the data, newest first
+  const financialYears = useMemo(() => {
+    const set = new Set();
+    tableData.forEach((r) => {
+      const fy = r.date ? getFinancialYear(r.date) : null;
+      if (fy) set.add(fy);
+    });
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [tableData]);
+
+  // Does a receipt pass the date-based filters (FY + range)? Both are ANDed.
+  const passesDate = useMemo(() => {
+    const dateActive = financialYear !== "All" || dateFrom || dateTo;
+    return (r) => {
+      if (!dateActive) return true;
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      if (isNaN(d)) return false;
+
+      if (financialYear !== "All" && getFinancialYear(r.date) !== financialYear)
+        return false;
+
+      if (dateFrom) {
+        const f = new Date(dateFrom);
+        f.setHours(0, 0, 0, 0);
+        if (d < f) return false;
+      }
+      if (dateTo) {
+        const t = new Date(dateTo);
+        t.setHours(23, 59, 59, 999);
+        if (d > t) return false;
+      }
+      return true;
+    };
+  }, [financialYear, dateFrom, dateTo]);
+
+  // Date-filtered rows drive both the per-type sums and the table.
+  const dateFilteredData = useMemo(
+    () => tableData.filter(passesDate),
+    [tableData, passesDate],
+  );
+
   const typeSums = useMemo(() => {
     const map = {};
-    tableData.forEach((r) => {
+    dateFilteredData.forEach((r) => {
       const type = r.paymenttype || "Unknown";
       map[type] =
         (map[type] || 0) + Number(r.totalreceived ?? r.amountpaid ?? 0);
     });
     return map;
-  }, [tableData]);
+  }, [dateFilteredData]);
 
   const filteredData = useMemo(() => {
-    return tableData.filter((r) => {
+    return dateFilteredData.filter((r) => {
       const membershipId = r.membershipid || r.seniority_no || "";
       const matchSearch =
         searchQuery.trim() === "" ||
@@ -62,7 +119,7 @@ export default function Payments() {
       const matchType = filterType === "All" || r.paymenttype === filterType;
       return matchSearch && matchType;
     });
-  }, [tableData, searchQuery, filterType]);
+  }, [dateFilteredData, searchQuery, filterType]);
 
   const filteredTotal = useMemo(
     () =>
@@ -78,12 +135,20 @@ export default function Payments() {
     setDropdownOpen(false);
   };
 
+  const clearDateFilters = () => {
+    setFinancialYear("All");
+    setDateFrom("");
+    setDateTo("");
+  };
+
+  const dateFilterActive = financialYear !== "All" || dateFrom || dateTo;
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
 
       <div className="px-[50px] pt-[50px]">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-4">
           <h1 className="font-semibold text-[24px]">Transactions Details</h1>
 
           {/* Right side: Filter + Sum badge + Search */}
@@ -279,6 +344,95 @@ export default function Payments() {
             </div>
           </div>
         </div>
+
+        {/* Second row: Financial year + date range */}
+        <div className="flex flex-wrap items-end gap-4 mb-6">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              Financial Year
+            </label>
+            <select
+              value={financialYear}
+              onChange={(e) => setFinancialYear(e.target.value)}
+              className={`px-4 py-2 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent cursor-pointer ${
+                financialYear !== "All"
+                  ? "border-[#EF742C] text-[#EF742C]"
+                  : "border-gray-300 text-gray-700"
+              }`}
+            >
+              <option value="All">All Years</option>
+              {financialYears.map((fy) => (
+                <option key={fy} value={fy}>
+                  {fy}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              From
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className={`px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent ${
+                dateFrom ? "border-[#EF742C] text-[#EF742C]" : "border-gray-300 text-gray-700"
+              }`}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              To
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              className={`px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent ${
+                dateTo ? "border-[#EF742C] text-[#EF742C]" : "border-gray-300 text-gray-700"
+              }`}
+            />
+          </div>
+
+          {dateFilterActive && (
+            <button
+              onClick={clearDateFilters}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-500 border border-gray-300 rounded-lg hover:border-red-400 hover:text-red-500 transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              Clear dates
+            </button>
+          )}
+
+          {dateFilterActive && (
+            <div className="ml-auto flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2">
+              <span className="text-xs text-gray-500 font-medium">
+                {filteredData.length}{" "}
+                {filteredData.length === 1 ? "record" : "records"}:
+              </span>
+              <span className="text-sm font-bold text-[#EF742C]">
+                ₹{filteredTotal.toLocaleString("en-IN")}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -356,7 +510,7 @@ export default function Payments() {
 
           {filteredData.length === 0 && (
             <div className="p-6 text-center text-gray-500">
-              {searchQuery || filterType !== "All"
+              {searchQuery || filterType !== "All" || dateFilterActive
                 ? "No receipts match the current filters."
                 : "No receipts found."}
             </div>
