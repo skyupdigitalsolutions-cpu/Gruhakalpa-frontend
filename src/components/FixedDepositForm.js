@@ -85,7 +85,6 @@ export function FixedDepositForm() {
   const [memberStatus, setMemberStatus] = useState("idle"); // idle | found | not_found
   const [checking, setChecking] = useState(false);
 
-  const [fdrNo, setFdrNo] = useState("");
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [tenureMonths, setTenureMonths] = useState(12);
@@ -93,6 +92,10 @@ export function FixedDepositForm() {
   const [interestRate, setInterestRate] = useState("");
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // The member's existing FDs — used to reuse the base FDR number and to
+  // skip receipts already attached to an earlier round.
+  const [existingFds, setExistingFds] = useState([]);
 
   // Linked FD receipts for the member (the "amount paid dates" to pick from).
   const [fdReceipts, setFdReceipts] = useState([]);
@@ -115,6 +118,7 @@ export function FixedDepositForm() {
     setMemberStatus("idle");
     setFdReceipts([]);
     setSelectedReceiptIds([]);
+    setExistingFds([]);
   }, [membershipId, membershipInput]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lookupMember = async (id) => {
@@ -129,11 +133,13 @@ export function FixedDepositForm() {
         setMobile(String(m.mobile ?? m.mobilenumber ?? m.mobile_number ?? ""));
         setMemberStatus("found");
         toast.success("Member found — details auto-filled");
+        fetchMemberFds(id);
         fetchFdReceipts(id);
       } else {
         setMemberStatus("not_found");
         setFdReceipts([]);
         setSelectedReceiptIds([]);
+        setExistingFds([]);
       }
     } catch (e) {
       console.error(e);
@@ -168,13 +174,67 @@ export function FixedDepositForm() {
     }
   };
 
+  // Fetch the member's existing FDs so we can (a) preview the next FDR round and
+  // (b) hide receipts already attached to an earlier round.
+  const fetchMemberFds = async (id) => {
+    try {
+      const res = await axios.get(`${API_BASE}/fixed-deposits`, {
+        params: { membershipId: id },
+      });
+      setExistingFds(res.data.data || []);
+    } catch (e) {
+      console.error(e);
+      setExistingFds([]);
+    }
+  };
+
   const toggleReceipt = (rid) =>
     setSelectedReceiptIds((prev) =>
       prev.includes(rid) ? prev.filter((x) => x !== rid) : [...prev, rid]
     );
 
-  const selectedReceipts = fdReceipts.filter((r) => selectedReceiptIds.includes(r._id));
+  // Receipt ids already consumed by an earlier FD round for this member.
+  const usedReceiptIds = new Set();
+  existingFds.forEach((fd) =>
+    (fd.receipts || []).forEach((r) => {
+      if (r && r.receipt_id) usedReceiptIds.add(String(r.receipt_id));
+    })
+  );
+  // Only offer receipts not already attached to a previous round.
+  const availableReceipts = fdReceipts.filter(
+    (r) => !usedReceiptIds.has(String(r._id))
+  );
+
+  const selectedReceipts = availableReceipts.filter((r) => selectedReceiptIds.includes(r._id));
   const selectedTotal = selectedReceipts.reduce((s, r) => s + (Number(r.amountpaid) || 0), 0);
+
+  // Preview the FDR number this FD will get. All of a member's FDs share one
+  // base number; each is a round (R01, R02 …). For a brand-new member the base
+  // sequence is assigned by the server on save.
+  const fdrRoundInfo = (() => {
+    if (memberStatus !== "found") return null;
+    if (!existingFds.length) {
+      return { isNew: true, round: 1, text: "New FDR · Round R01 (number assigned on save)" };
+    }
+    const base =
+      existingFds.find((f) => f.baseFdrNo)?.baseFdrNo ||
+      String(existingFds[0].fdrNo || "").replace(/-R\d+$/i, "");
+    const maxRound = existingFds.reduce((mx, f) => {
+      const rn =
+        Number(f.renewalNo) ||
+        (String(f.fdrNo || "").match(/-R(\d+)$/i)
+          ? parseInt(String(f.fdrNo).match(/-R(\d+)$/i)[1], 10)
+          : 0);
+      return Math.max(mx, rn);
+    }, 0);
+    const round = maxRound + 1;
+    return {
+      isNew: false,
+      round,
+      base,
+      text: `${base}-R${String(round).padStart(2, "0")}`,
+    };
+  })();
 
   // ── Live preview ──
   const principal = Number(amount) || 0;
@@ -190,7 +250,6 @@ export function FixedDepositForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (memberStatus !== "found") return toast.error("Enter a valid membership number (member must exist)");
-    if (!fdrNo.trim()) return toast.error("FDR No is required");
     if (!name.trim()) return toast.error("Name is required");
     if (!principal) return toast.error("Amount is required");
     if (!rate) return toast.error("Custom interest rate is required");
@@ -202,9 +261,9 @@ export function FixedDepositForm() {
         receipt_no: r.receipt_no,
         date: r.date,
         amount: Number(r.amountpaid) || 0,
+        pdfUrl: r.pdfUrl || null,
       }));
       const payload = {
-        fdrNo: fdrNo.trim(),
         membershipId,
         name,
         date,
@@ -220,7 +279,6 @@ export function FixedDepositForm() {
       setMembershipInput("");
       setMembershipId("");
       setMemberStatus("idle");
-      setFdrNo("");
       setName("");
       setMobile("");
       setAmount("");
@@ -229,6 +287,7 @@ export function FixedDepositForm() {
       setDate(todayISO());
       setFdReceipts([]);
       setSelectedReceiptIds([]);
+      setExistingFds([]);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to create fixed deposit");
     } finally {
@@ -285,15 +344,25 @@ export function FixedDepositForm() {
               )}
             </div>
 
-            {/* FDR No (user-entered) */}
+            {/* FDR No (auto — shared base per member, one round per FD) */}
             <div>
-              <label className={label}>FDR No. <span className="text-red-500">*</span></label>
+              <label className={label}>FDR No. (auto)</label>
               <input
-                className={field}
-                value={fdrNo}
-                onChange={(e) => setFdrNo(e.target.value)}
-                placeholder="e.g. FDR2026001"
+                className={`${field} bg-gray-50`}
+                value={fdrRoundInfo ? fdrRoundInfo.text : ""}
+                readOnly
+                placeholder="Assigned when a member is selected"
               />
+              {fdrRoundInfo && !fdrRoundInfo.isNew && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Member already holds {existingFds.length} FD(s) — this becomes Round R{String(fdrRoundInfo.round).padStart(2, "0")} of {fdrRoundInfo.base}.
+                </div>
+              )}
+              {fdrRoundInfo && fdrRoundInfo.isNew && (
+                <div className="text-xs text-gray-500 mt-1">
+                  First FD for this member — a new base FDR number is assigned on save.
+                </div>
+              )}
             </div>
 
             {/* Name */}
@@ -366,11 +435,15 @@ export function FixedDepositForm() {
               <div className="text-sm text-gray-400">Enter a valid membership id to load its Fixed Deposit receipts.</div>
             ) : loadingReceipts ? (
               <div className="text-sm text-gray-400 animate-pulse">Loading receipts…</div>
-            ) : fdReceipts.length === 0 ? (
-              <div className="text-sm text-amber-600">No Fixed Deposit receipts found for this member.</div>
+            ) : availableReceipts.length === 0 ? (
+              <div className="text-sm text-amber-600">
+                {fdReceipts.length === 0
+                  ? "No Fixed Deposit receipts found for this member."
+                  : "All of this member's FD receipts are already attached to earlier rounds."}
+              </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {fdReceipts.map((r) => {
+                {availableReceipts.map((r) => {
                   const checked = selectedReceiptIds.includes(r._id);
                   return (
                     <label
@@ -384,6 +457,12 @@ export function FixedDepositForm() {
                     </label>
                   );
                 })}
+              </div>
+            )}
+
+            {memberStatus === "found" && usedReceiptIds.size > 0 && (
+              <div className="mt-2 text-xs text-gray-400">
+                {usedReceiptIds.size} receipt(s) hidden — already attached to earlier FD round(s).
               </div>
             )}
 

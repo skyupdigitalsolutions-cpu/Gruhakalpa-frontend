@@ -20,6 +20,58 @@ export function FixedDepositList() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | active | cancelled
   const [selected, setSelected] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  // Open the receipt PDF in a new tab (prefer the stored Cloudinary URL; fall
+  // back to the backend proxy which streams it by receipt id).
+  const viewReceipt = (r) => {
+    if (r.pdfUrl) {
+      window.open(r.pdfUrl, "_blank", "noopener");
+    } else if (r.receipt_id) {
+      window.open(`${API_BASE}/receipts/${r.receipt_id}/download`, "_blank", "noopener");
+    } else {
+      toast.error("PDF not available for this receipt");
+    }
+  };
+
+  // Download the receipt PDF as a file. Uses the backend proxy (avoids Cloudinary
+  // 401s); if that fails, falls back to opening the stored URL directly.
+  const downloadReceipt = async (r) => {
+    if (!r.receipt_id && !r.pdfUrl) {
+      return toast.error("PDF not available for this receipt");
+    }
+    const key = r.receipt_id || r.receipt_no;
+    setDownloadingId(key);
+    try {
+      if (!r.receipt_id) throw new Error("no id");
+      const res = await axios.get(`${API_BASE}/receipts/${r.receipt_id}/download`, {
+        responseType: "blob",
+      });
+      // Backend may fall back to JSON { pdfUrl } if Cloudinary refuses.
+      if ((res.data?.type || "").includes("application/json")) {
+        const text = await res.data.text();
+        const parsed = JSON.parse(text);
+        if (parsed.pdfUrl) return window.open(parsed.pdfUrl, "_blank", "noopener");
+        throw new Error("unavailable");
+      }
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${r.receipt_no || "receipt"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      if (r.pdfUrl) {
+        window.open(r.pdfUrl, "_blank", "noopener");
+      } else {
+        toast.error("Failed to download receipt");
+      }
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -144,6 +196,47 @@ export function FixedDepositList() {
               <h2 className="text-xl font-semibold">{selected.fdrNo}</h2>
               <button onClick={() => setSelected(null)} className="text-gray-400 text-2xl leading-none">×</button>
             </div>
+
+            {/* All FDs (rounds) held by this member — click to switch */}
+            {(() => {
+              const rounds = list
+                .filter((f) => f.membershipId === selected.membershipId)
+                .sort(
+                  (a, b) =>
+                    (Number(a.renewalNo) || 0) - (Number(b.renewalNo) || 0) ||
+                    String(a.fdrNo).localeCompare(String(b.fdrNo)),
+                );
+              if (rounds.length <= 1) return null;
+              return (
+                <div className="mb-4">
+                  <div className="text-xs text-gray-500 uppercase mb-2">
+                    Member's Fixed Deposits ({rounds.length} rounds)
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {rounds.map((f) => {
+                      const active = f._id === selected._id;
+                      return (
+                        <button
+                          key={f._id}
+                          type="button"
+                          onClick={() => setSelected(f)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                            active
+                              ? "bg-[#EF742C] text-white border-[#EF742C]"
+                              : f.cancelled
+                              ? "bg-gray-50 text-gray-400 border-gray-200 line-through"
+                              : "bg-white text-gray-700 border-gray-300 hover:bg-orange-50"
+                          }`}
+                          title={`${f.fdrNo} · ${inr(f.amount)}`}
+                        >
+                          R{String(f.renewalNo || 0).padStart(2, "0")} · {inr(f.amount)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Info label="Membership Id" value={selected.membershipId} />
               <Info label="Name" value={selected.name} />
@@ -167,14 +260,41 @@ export function FixedDepositList() {
               <div className="mt-4">
                 <div className="text-xs text-gray-500 uppercase mb-2">Linked Receipts</div>
                 <div className="space-y-1.5">
-                  {selected.receipts.map((r, i) => (
-                    <div key={i} className="flex justify-between text-sm border border-gray-100 rounded px-3 py-1.5">
-                      <span>{fmtDate(r.date)}</span>
-                      <span>{inr(r.amount)}</span>
-                      <span className="text-gray-500">#{r.receipt_no}</span>
-                    </div>
-                  ))}
+                  {selected.receipts.map((r, i) => {
+                    const key = r.receipt_id || r.receipt_no || i;
+                    const hasPdf = !!(r.pdfUrl || r.receipt_id);
+                    return (
+                      <div key={i} className="flex items-center justify-between gap-2 text-sm border border-gray-100 rounded px-3 py-1.5">
+                        <span className="w-24">{fmtDate(r.date)}</span>
+                        <span className="w-24">{inr(r.amount)}</span>
+                        <span className="text-gray-500 flex-1 truncate">#{r.receipt_no}</span>
+                        {canCancel && (
+                          <span className="flex items-center gap-2 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => viewReceipt(r)}
+                              disabled={!hasPdf}
+                              className={`font-semibold ${hasPdf ? "text-[#EF742C] hover:underline" : "text-gray-300 cursor-not-allowed"}`}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadReceipt(r)}
+                              disabled={!hasPdf || downloadingId === key}
+                              className={`font-semibold ${hasPdf ? "text-blue-600 hover:underline" : "text-gray-300 cursor-not-allowed"}`}
+                            >
+                              {downloadingId === key ? "…" : "Download"}
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+                {!canCancel && (
+                  <div className="text-xs text-gray-400 mt-1">Receipt PDFs are available to admins.</div>
+                )}
               </div>
             )}
 
