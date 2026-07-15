@@ -1133,7 +1133,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const DepositReceiptContent = () => {
     // Top-right timestamp = when this PDF was generated (matches the
     // "Date: 24-Nov-25 11:11:22" stamp style in the reference receipt).
-    const formatDateTime = (d) => {
+    const formatDate = (d) => {
       const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       const day = String(d.getDate()).padStart(2, "0");
       const month = monthsShort[d.getMonth()];
@@ -1144,13 +1144,13 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       return `${day}-${month}-${year} ${hh}:${mm}:${ss}`;
     };
     // Payment date line inside the paragraph — the receipt date field only
-    // captures a date, so time is stamped 00:00:00 (matches reference).
+    // captures a date (no time stamp appended, per the latest receipt copy).
     const formatPaymentDate = (dateString) => {
       const d = new Date(dateString);
       const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       const day = String(d.getDate()).padStart(2, "0");
       const month = monthsShort[d.getMonth()];
-      return `${day}-${month}-${d.getFullYear()} 00:00:00`;
+      return `${day}-${month}-${d.getFullYear()}`;
     };
 
     const qrValue = JSON.stringify({
@@ -1245,27 +1245,27 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "16px", letterSpacing: "0.5px" }}>
               PAYMENT RECEIPT
             </div>
-            <div style={{ position: "absolute", top: "20px", right: "22px", textAlign: "right", fontSize: "10px", color: "#2b2b2b", fontWeight: "600" }}>
+            <div style={{ position: "absolute", top: "50px", right: "22px", textAlign: "right", fontSize: "12px", color: "#2b2b2b", fontWeight: "600" }}>
               <div>Receipt No: {formik.values.receiptNo}</div>
-              <div>Date: {formatDateTime(new Date())}</div>
+              <div>Date: {formatDate(new Date())}</div>
             </div>
           </div>
 
           {/* Body paragraph — generous letter-style rhythm instead of a table */}
-          <div style={{ padding: "50px 46px 0", fontSize: "13.5px", lineHeight: "2.2" }}>
-            <div style={{ marginBottom: "30px" }}>
+          <div style={{ padding: "50px 46px 0", fontSize: "15.5px", lineHeight: "1.6" }}>
+            <div style={{ marginBottom: "16px" }}>
               Dear <strong>{formik.values.receivedFrom}</strong>,
             </div>
-            <div style={{ marginBottom: "26px" }}>
+            <div style={{ marginBottom: "14px" }}>
               This receipt acknowledges your payment of Rs. {total.toLocaleString("en-IN")} (
               <strong>{amountInWords} Rupees</strong> only) to the society, towards{" "}
               <strong>{formik.values.paymentCategory}</strong>.{feeNote}
             </div>
-            <div style={{ marginBottom: "26px" }}>Project Name: NA</div>
-            <div style={{ marginBottom: "26px" }}>
+            {/* <div style={{ marginBottom: "14px" }}>Project Name: NA</div> */}
+            <div style={{ marginBottom: "14px" }}>
               Your membership ID <strong>{formik.values.seniorityNumber}</strong> has been credited accordingly.
             </div>
-            <div style={{ marginBottom: "26px" }}>
+            <div style={{ marginBottom: "14px" }}>
               The payment was processed via <strong>{formik.values.paymentMode}</strong>
               {hasTransactionRef ? (
                 <> and the transaction reference number is <strong>{transactionIds[0]}</strong>.</>
@@ -1274,9 +1274,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
               )}{" "}
               on {formatPaymentDate(formik.values.receiptDate)}
             </div>
-            <div style={{ marginBottom: "56px" }}>Thank you for your continued support and contributions.</div>
+            <div style={{ marginBottom: "32px" }}>Thank you for your continued support and contributions.</div>
             <div>Sincerely,</div>
-            <div style={{ marginTop: "56px" }}>Sd/-</div>
+            <div style={{ marginTop: "32px" }}>Sd/-</div>
             <div>Secretary</div>
           </div>
 
