@@ -153,13 +153,45 @@ export function RecurringDepositList() {
               <Info label="Tenure" value={`${selected.tenureMonths} months`} />
               <Info label="Maturity Date" value={fmtDate(selected.maturityDate)} />
               <Info label="Monthly Amount" value={inr(selected.monthlyAmount)} />
-              <Info label="Months Paid" value={selected.monthsPaid || 0} />
-              <Info label="Total Paid" value={inr(selected.totalPaid)} />
-              <Info label="Interest Rate" value={`${selected.interestRate}%`} />
-              <Info label="Interest Amount" value={inr(selected.interestAmount)} />
+              <Info label="Interest Rate" value={`${selected.interestRate}% p.a. (monthly comp.)`} />
+              <Info label="Months Paid" value={`${selected.monthsPaid || 0}/${selected.tenureMonths}`} />
+              <Info label="Total Paid (so far)" value={inr(selected.totalPaid)} />
+              <Info label="Value so far" value={inr(selected.accruedValue)} />
+              <Info label="Interest so far" value={inr(selected.accruedInterest)} />
+              <Info label="Total Deposit (at maturity)" value={inr(selected.totalDeposit)} />
+              <Info label="Interest (at maturity)" value={inr(selected.interestAmount)} />
               <Info label="Maturity Amount" value={inr(selected.maturityAmount)} />
               <Info label="Status" value={selected.cancelled ? "Cancelled" : (selected.status || "active")} />
             </div>
+
+            {Array.isArray(selected.schedule) && selected.schedule.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs text-gray-500 uppercase mb-2">Compound Schedule (full tenure)</div>
+                <div className="border border-gray-100 rounded-lg overflow-hidden">
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[#EF742C]/10 text-left sticky top-0">
+                        <tr>
+                          {["Month", "Payment", "Interest", "Balance"].map((h) => (
+                            <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selected.schedule.map((row) => (
+                          <tr key={row.month} className="border-t border-gray-100">
+                            <td className="px-3 py-1.5 whitespace-nowrap">{row.month}</td>
+                            <td className="px-3 py-1.5 whitespace-nowrap">{inr(row.deposit)}</td>
+                            <td className="px-3 py-1.5 whitespace-nowrap text-green-600">{inr(row.interest)}</td>
+                            <td className="px-3 py-1.5 whitespace-nowrap font-medium">{inr(row.balance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {Array.isArray(selected.installments) && selected.installments.length > 0 && (
               <div className="mt-4">

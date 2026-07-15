@@ -117,14 +117,33 @@ export function RecurringDepositForm() {
   const handleMembershipInput = (e) =>
     setMembershipInput(e.target.value.replace(/\D/g, "").slice(0, 4));
 
-  // ── Live preview ──
+  // ── Live preview — MONTHLY COMPOUNDING ──
+  // Fixed monthly deposit; at the end of each completed month the running balance
+  // earns one month's interest (rate/12), which is added back to the balance. So
+  // the first payment starts earning only after the first month, and each later
+  // payment compounds for the months that remain until maturity.
   const monthly = Number(monthlyAmount) || 0;
   const rate = Number(interestRate) || 0;
   const months = Number(tenureMonths) || 0;
   const maturityDate = amountPaidDate && months ? addMonths(amountPaidDate, months) : null;
+
+  const buildSchedule = (P, r, n) => {
+    const i = r / 1200;
+    let balance = 0;
+    const rows = [];
+    for (let m = 1; m <= n; m++) {
+      balance += P; // deposit at start of month
+      const interest = balance * i; // this month's interest
+      balance += interest; // compounded into the balance
+      rows.push({ month: m, deposit: P, interest, balance });
+    }
+    return rows;
+  };
+
+  const schedule = monthly > 0 && months > 0 ? buildSchedule(monthly, rate, months) : [];
   const projectedTotal = monthly * months;
-  const projectedInterest = projectedTotal && rate ? (projectedTotal * rate * (months / 12)) / 100 : 0;
-  const projectedMaturity = projectedTotal + projectedInterest;
+  const projectedMaturity = schedule.length ? schedule[schedule.length - 1].balance : 0;
+  const projectedInterest = projectedMaturity - projectedTotal;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -284,20 +303,54 @@ export function RecurringDepositForm() {
             </div>
           </div>
 
-          {/* Projected preview */}
+          {/* Projected preview — compound schedule */}
           {monthly > 0 && rate > 0 && months > 0 && (
             <div className="mt-6 bg-white border border-[#EF742C]/20 rounded-xl p-5">
-              <h3 className="font-semibold text-[14px] mb-3 text-[#EF742C]">Projection (if all {months} months are paid)</h3>
+              <h3 className="font-semibold text-[14px] mb-3 text-[#EF742C]">Projection (monthly compounding, if all {months} months are paid)</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div><div className="text-xs text-gray-500 uppercase">Monthly Payable</div><div className="font-semibold">{inr(monthly)}</div></div>
                 <div><div className="text-xs text-gray-500 uppercase">Total Deposited</div><div className="font-semibold">{inr(projectedTotal)}</div></div>
                 <div><div className="text-xs text-gray-500 uppercase">Interest ({rate}%)</div><div className="font-semibold text-green-600">{inr(projectedInterest)}</div></div>
                 <div><div className="text-xs text-gray-500 uppercase">Maturity Value</div><div className="font-bold text-[#EF742C]">{inr(projectedMaturity)}</div></div>
-                <div><div className="text-xs text-gray-500 uppercase">Matures On</div><div className="font-semibold">{fmtDate(maturityDate)}</div></div>
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
-                Interest accrues on the total paid, pro-rated by completed months (total × rate% × months/12). If the member
-                withdraws early, they earn interest only for the months actually paid. Record each monthly payment from the
-                Recurring Deposit list.
+
+              {/* Per-month schedule: deposit, interest earned that month, running balance */}
+              <div className="mt-4 border border-gray-100 rounded-lg overflow-hidden">
+                <div className="max-h-72 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#EF742C]/10 text-left sticky top-0">
+                      <tr>
+                        {["Month", "Payment", "Interest", "Balance"].map((h) => (
+                          <th key={h} className="px-4 py-2 font-semibold whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schedule.map((row) => (
+                        <tr key={row.month} className="border-t border-gray-100">
+                          <td className="px-4 py-2 whitespace-nowrap">{row.month}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{inr(row.deposit)}</td>
+                          <td className="px-4 py-2 whitespace-nowrap text-green-600">{inr(row.interest)}</td>
+                          <td className="px-4 py-2 whitespace-nowrap font-medium">{inr(row.balance)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-200 bg-gray-50 font-semibold">
+                        <td className="px-4 py-2">Total</td>
+                        <td className="px-4 py-2">{inr(projectedTotal)}</td>
+                        <td className="px-4 py-2 text-green-600">{inr(projectedInterest)}</td>
+                        <td className="px-4 py-2 text-[#EF742C]">{inr(projectedMaturity)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-gray-400">
+                Matures on {fmtDate(maturityDate)}. Interest compounds monthly: each month the balance earns
+                rate/12 (= {(rate / 12).toFixed(4)}% per month) which is added back, so the first payment
+                starts earning only after the first month. Record each monthly payment from the Recurring Deposit list.
               </div>
             </div>
           )}
