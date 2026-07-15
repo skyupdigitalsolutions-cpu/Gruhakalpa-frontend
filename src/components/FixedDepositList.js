@@ -1,6 +1,7 @@
 /* eslint-disable */
 import axios from "axios";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
 
@@ -11,9 +12,11 @@ const fmtDate = (d) =>
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 export function FixedDepositList() {
+  const navigate = useNavigate();
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
   const isAdmin = !!localStorage.getItem("adminToken");
   const canCancel = isSuperAdmin || isAdmin;
+  const prefix = isSuperAdmin ? "/superadmin" : "";
 
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -254,6 +257,45 @@ export function FixedDepositList() {
             <div className="mt-3">
               <div className="text-xs text-gray-500 uppercase mb-1">Sum in words</div>
               <div className="text-sm">{selected.sumInWords || "—"}</div>
+            </div>
+
+            {/* FD Certificate — generate or view the printed FDR receipt */}
+            <div className="mt-4 border border-gray-100 rounded-lg px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-gray-500 uppercase">FD Certificate</div>
+                {selected.certificate?.pdfUrl && (
+                  <span className="text-xs text-green-600 font-medium">Generated</span>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => navigate(`${prefix}/fdcertificate?fdId=${selected._id}`)}
+                  className="font-semibold text-[#EF742C] hover:underline"
+                >
+                  {selected.certificate?.pdfUrl ? "Regenerate Certificate" : "Generate Certificate"}
+                </button>
+                {selected.certificate?.pdfUrl && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => window.open(selected.certificate.pdfUrl, "_blank", "noopener")}
+                      className="font-semibold text-blue-600 hover:underline"
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.open(`${API_BASE}/fixed-deposits/${selected._id}/certificate/download`, "_blank", "noopener")
+                      }
+                      className="font-semibold text-blue-600 hover:underline"
+                    >
+                      Download
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {Array.isArray(selected.receipts) && selected.receipts.length > 0 && (

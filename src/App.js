@@ -34,6 +34,7 @@ import { FixedDepositForm } from "./components/FixedDepositForm";
 import { RecurringDepositForm } from "./components/RecurringDepositForm";
 import { FixedDepositList } from "./components/FixedDepositList";
 import { RecurringDepositList } from "./components/RecurringDepositList";
+import { FDCertificateForm } from "./components/FDCertificateForm";
 
 const MainApp = () => {
   const location = useLocation();
@@ -55,6 +56,7 @@ const MainApp = () => {
     "/superadmin/bankstatement",
     "/superadmin/fixeddepositlist",
     "/superadmin/recurringdepositlist",
+    "/superadmin/fdcertificate",
   ];
 
   const memberRoutes = ["/member/dashboard"];
@@ -217,6 +219,14 @@ const MainApp = () => {
               </SuperAdminProtectedRoute>
             }
           />
+          <Route
+            path="/superadmin/fdcertificate"
+            element={
+              <SuperAdminProtectedRoute>
+                <FDCertificateForm />
+              </SuperAdminProtectedRoute>
+            }
+          />
 
           {/* Admin Protected Routes */}
           <Route
@@ -344,6 +354,14 @@ const MainApp = () => {
             element={
               <ProtectedRoute>
                 <RecurringDepositList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/fdcertificate"
+            element={
+              <ProtectedRoute>
+                <FDCertificateForm />
               </ProtectedRoute>
             }
           />

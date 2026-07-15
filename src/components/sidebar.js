@@ -119,6 +119,23 @@ export function SideBar({ prefix = "" }) {
 
           <li className="mt-3">
             <Link
+              to={`${prefix}/fdcertificate`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/fdcertificate`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/fdcertificate`) ? "/images/assignment_ind_green.svg" : "/images/assignment_ind_white.svg"}
+                alt="FD Certificate"
+              />
+              <span className={isActive(`${prefix}/fdcertificate`) ? "text-[#456116] font-semibold" : "text-white"}>
+                FD Certificate
+              </span>
+            </Link>
+          </li>
+
+          <li className="mt-3">
+            <Link
               to={`${prefix}/receiptform`}
               className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
                 isActive(`${prefix}/receiptform`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
