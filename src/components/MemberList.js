@@ -294,9 +294,13 @@ export function MemberList() {
                     selectedMember.membershiptype,
                   )}
                   {field(
-                    "Membership Day",
-                    "membershipday",
-                    selectedMember.membershipday,
+                    "Membership Date",
+                    "membership_date",
+                    selectedMember.membership_date
+                      ? new Date(
+                          selectedMember.membership_date,
+                        ).toLocaleDateString()
+                      : "-",
                   )}
                   {field(
                     "Membership Fees",
