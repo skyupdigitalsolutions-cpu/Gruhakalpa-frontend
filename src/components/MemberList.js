@@ -4,6 +4,24 @@ import { Header } from "./Header";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
+// Handles both real Date objects / ISO strings (membership_date)
+// and dd-mm-yyyy strings (date, dob) without misparsing.
+const formatDate = (val) => {
+  if (!val) return "-";
+  // Real Date object or ISO string (e.g. 2023-08-03T00:00:00.000Z)
+  if (val instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(val)) {
+    const d = new Date(val);
+    return isNaN(d) ? "-" : d.toLocaleDateString();
+  }
+  // dd-mm-yyyy string
+  const m = String(val).match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (m) {
+    const [, dd, mm, yyyy] = m;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return String(val);
+};
+
 export function MemberList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
 
@@ -113,9 +131,7 @@ export function MemberList() {
                   className="border-b border-gray-200 text-start text-[14px] hover:bg-orange-50 transition-colors duration-200"
                 >
                   <td className="px-6 py-4 text-gray-700 font-medium">
-                    {member.date
-                      ? new Date(member.date).toLocaleDateString()
-                      : "-"}
+                    {formatDate(member.date)}
                   </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {member.name || "-"}
@@ -296,11 +312,7 @@ export function MemberList() {
                   {field(
                     "Membership Date",
                     "membership_date",
-                    selectedMember.membership_date
-                      ? new Date(
-                          selectedMember.membership_date,
-                        ).toLocaleDateString()
-                      : "-",
+                    formatDate(selectedMember.membership_date),
                   )}
                   {field(
                     "Membership Fees",
@@ -308,13 +320,7 @@ export function MemberList() {
                     selectedMember.membershipfees,
                   )}
                   {field("Email", "email", selectedMember.email)}
-                  {field(
-                    "DOB",
-                    "dob",
-                    selectedMember.dob
-                      ? new Date(selectedMember.dob).toLocaleDateString()
-                      : "-",
-                  )}
+                  {field("DOB", "dob", formatDate(selectedMember.dob))}
                   {field(
                     "Adhar Number",
                     "aadharnumber",
