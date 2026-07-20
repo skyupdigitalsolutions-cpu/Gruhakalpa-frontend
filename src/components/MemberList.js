@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Header } from "./Header";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
@@ -26,6 +26,7 @@ export function MemberList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
 
   const headers = [
+    "Sl. No.",
     "Date",
     "Member Name",
     "Membership Id",
@@ -33,6 +34,8 @@ export function MemberList() {
     "",
   ];
   const [Memberdetails, SetMemberDetails] = useState([]);
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [search, setSearch] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -46,6 +49,19 @@ export function MemberList() {
       })
       .catch((err) => console.error("Unable to fetch the data", err));
   }, []);
+
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return Memberdetails.filter((m) => {
+      const matchesType =
+        typeFilter === "All" || m.membershiptype === typeFilter;
+      const matchesSearch =
+        !q ||
+        (m.name || "").toLowerCase().includes(q) ||
+        (m.membership_id || "").toLowerCase().includes(q);
+      return matchesType && matchesSearch;
+    });
+  }, [Memberdetails, typeFilter, search]);
 
   const handleViewDetails = (member) => {
     setSelectedMember(member);
@@ -109,6 +125,28 @@ export function MemberList() {
       <div className="px-[50px] pt-[50px] font-semibold text-[24px]">
         All Member List
       </div>
+      <div className="w-full max-w-[1120px] mx-auto px-6 pt-4 flex flex-wrap gap-3 items-center">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or membership ID"
+          className="flex-1 min-w-[220px] border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C]"
+        />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C]"
+        >
+          <option value="All">All Membership Types</option>
+          <option value="Permanent Member">Permanent Member</option>
+          <option value="Associate Member">Associate Member</option>
+        </select>
+        <span className="text-sm text-gray-500">
+          {filteredMembers.length} member
+          {filteredMembers.length === 1 ? "" : "s"}
+        </span>
+      </div>
       <div className="w-full max-w-[1120px] mx-auto p-6">
         <div className="overflow-hidden rounded-2xl shadow-lg">
           <table className="w-full">
@@ -125,11 +163,14 @@ export function MemberList() {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {Memberdetails.map((member, rowIndex) => (
+              {filteredMembers.map((member, rowIndex) => (
                 <tr
                   key={rowIndex}
                   className="border-b border-gray-200 text-start text-[14px] hover:bg-orange-50 transition-colors duration-200"
                 >
+                  <td className="px-6 py-4 text-gray-700 font-medium">
+                    {rowIndex + 1}
+                  </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {formatDate(member.date)}
                   </td>
@@ -154,7 +195,7 @@ export function MemberList() {
               ))}
             </tbody>
           </table>
-          {Memberdetails.length === 0 && (
+          {filteredMembers.length === 0 && (
             <div className="p-6 text-center text-red-600">Not found.</div>
           )}
         </div>
