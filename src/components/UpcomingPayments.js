@@ -718,6 +718,20 @@ function SetupTab() {
             onChange={(v) => set({ autoEnabled: v })}
           />
         </div>
+
+        <div className="flex items-center justify-between mt-4">
+          <div>
+            <div className="font-semibold text-[16px]">Event notifications</div>
+            <div className="text-sm text-gray-500">
+              When on, a WhatsApp + email goes out automatically when a member,
+              site booking, FD, RD, receipt, or FD certificate is created.
+            </div>
+          </div>
+          <Toggle
+            checked={s.eventNotificationsEnabled !== false}
+            onChange={(v) => set({ eventNotificationsEnabled: v })}
+          />
+        </div>
       </section>
 
       <hr />
@@ -858,6 +872,78 @@ function SetupTab() {
               value={s.whatsapp?.templateConfirmation || ""}
               onChange={(e) => setWa({ templateConfirmation: e.target.value })}
               placeholder="sent when a payment is received"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              Receipt template name (PDF attached)
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateReceipt || ""}
+              onChange={(e) => setWa({ templateReceipt: e.target.value })}
+              placeholder="gruhakalpa_receipt"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              FD-certificate template name (PDF attached)
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateFdCertificate || ""}
+              onChange={(e) => setWa({ templateFdCertificate: e.target.value })}
+              placeholder="gruhakalpa_fd_certificate"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              FD-created template name
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateFdCreated || ""}
+              onChange={(e) => setWa({ templateFdCreated: e.target.value })}
+              placeholder="gruhakalpa_fd_created"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              RD-created template name
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateRdCreated || ""}
+              onChange={(e) => setWa({ templateRdCreated: e.target.value })}
+              placeholder="gruhakalpa_rd_created"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              Member-added template name
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateMemberAdded || ""}
+              onChange={(e) => setWa({ templateMemberAdded: e.target.value })}
+              placeholder="gruhakalpa_member_added"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              Site-booking template name
+            </label>
+            <input
+              type="text"
+              value={s.whatsapp?.templateSiteBooking || ""}
+              onChange={(e) => setWa({ templateSiteBooking: e.target.value })}
+              placeholder="gruhakalpa_site_booking"
               className={field}
             />
           </div>
