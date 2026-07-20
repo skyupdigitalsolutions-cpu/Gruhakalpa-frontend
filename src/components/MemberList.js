@@ -353,7 +353,7 @@ export function MemberList() {
                   {field(
                     "Membership Date",
                     "membership_date",
-                    formatDate(selectedMember.membership_date),
+                    formatDate(selectedMember.date),
                   )}
                   {field(
                     "Membership Fees",
