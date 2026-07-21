@@ -742,7 +742,7 @@ const AddMember = () => {
         console.log("Member added successfully:", response.data);
         toast.success("Member added successfully!");
         // Store member data for receipt generation
-        setMemberReceiptData({
+        const receiptData = {
           name: formikStep1.values.Name,
           membership_id: formikStep1.values.membership_id,
           membershiptype: formikStep1.values.MembershipType,
@@ -752,8 +752,17 @@ const AddMember = () => {
           email: formikStep1.values.Email,
           receiptNo: response.data?.data?.membership_receipt_no || "",
           date: new Date().toISOString().split("T")[0],
-        });
+        };
+        setMemberReceiptData(receiptData);
         setIsFormCompleted(true);
+
+        // Generate the membership-receipt PDF in the background and POST it so
+        // the member-added WhatsApp/email goes out WITH the PDF attached. Fully
+        // silent — never blocks the success screen or shows an error to the admin.
+        uploadMemberReceiptPdf(receiptData).catch((e) =>
+          console.error("Member receipt PDF upload failed:", e?.message || e),
+        );
+
         formikStep1.resetForm();
         formikStep2.resetForm();
         formikStep3.resetForm();
@@ -841,6 +850,52 @@ const AddMember = () => {
     setCurrentStep(1);
     setIsFormCompleted(false);
     setMemberReceiptData(null);
+  };
+
+  // Render the membership receipt to a PDF and POST it to the backend, which
+  // uploads it to Cloudinary and fires the member-added WhatsApp (PDF attached)
+  // + email. Runs silently in the background right after a member is created.
+  const uploadMemberReceiptPdf = async (data) => {
+    if (!data || !data.membership_id) return;
+    const html2canvas = (await import("html2canvas")).default;
+    const { default: jsPDF } = await import("jspdf");
+    const { createRoot } = await import("react-dom/client");
+
+    const container = document.createElement("div");
+    container.style.cssText =
+      "position:fixed;left:-9999px;top:0;width:786px;background:#fff;padding:4px;margin:4px;box-sizing:border-box;";
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await new Promise((resolve) => {
+      root.render(<MemberReceiptContent data={data} />);
+      setTimeout(resolve, 800);
+    });
+
+    const canvas = await html2canvas(container, {
+      scale: 4,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+      width: 794,
+      x: -4,
+      y: -4,
+    });
+    root.unmount();
+    document.body.removeChild(container);
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.9);
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    pdf.addImage(imgData, "JPEG", 1, 1, 208, 295);
+
+    const pdfBase64 = pdf.output("datauristring").split(",")[1];
+    const pdfFilename = `Member_Receipt_${String(data.membership_id).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+
+    await axios.post(`${API_BASE}/member-receipt-pdf`, {
+      membership_id: data.membership_id,
+      pdfBase64,
+      pdfFilename,
+    });
   };
 
   const handleGenerateMemberPDF = async () => {
