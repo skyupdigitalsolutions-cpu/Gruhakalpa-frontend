@@ -847,7 +847,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateUpcoming || ""}
               onChange={(e) => setWa({ templateUpcoming: e.target.value })}
-              placeholder="gruhakalpa_payment_reminder"
+              placeholder="wa_reminder_payment"
               className={field}
             />
           </div>
@@ -859,7 +859,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateOverdue || ""}
               onChange={(e) => setWa({ templateOverdue: e.target.value })}
-              placeholder="gruhakalpa_payment_overdue"
+              placeholder="wa_overdue_payment"
               className={field}
             />
           </div>
@@ -883,7 +883,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateReceipt || ""}
               onChange={(e) => setWa({ templateReceipt: e.target.value })}
-              placeholder="gruhakalpa_receipt"
+              placeholder="wa_gruhakalpa_receipt"
               className={field}
             />
           </div>
@@ -895,7 +895,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateFdCertificate || ""}
               onChange={(e) => setWa({ templateFdCertificate: e.target.value })}
-              placeholder="gruhakalpa_fd_certificate"
+              placeholder="wa_gruhakalpa_fd_certificate"
               className={field}
             />
           </div>
@@ -907,7 +907,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateFdCreated || ""}
               onChange={(e) => setWa({ templateFdCreated: e.target.value })}
-              placeholder="gruhakalpa_fd_created"
+              placeholder="wa_gruhakalpa_fd_created"
               className={field}
             />
           </div>
@@ -919,7 +919,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateRdCreated || ""}
               onChange={(e) => setWa({ templateRdCreated: e.target.value })}
-              placeholder="gruhakalpa_rd_created"
+              placeholder="wa_gruhakalpa_rd_created"
               className={field}
             />
           </div>
@@ -931,7 +931,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateMemberAdded || ""}
               onChange={(e) => setWa({ templateMemberAdded: e.target.value })}
-              placeholder="gruhakalpa_member_added"
+              placeholder="wa_gruhakalpa_add_member"
               className={field}
             />
           </div>
@@ -943,7 +943,7 @@ function SetupTab() {
               type="text"
               value={s.whatsapp?.templateSiteBooking || ""}
               onChange={(e) => setWa({ templateSiteBooking: e.target.value })}
-              placeholder="gruhakalpa_site_booking"
+              placeholder="wa_gruhakalpa_site_booking"
               className={field}
             />
           </div>
