@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { Header } from "./Header";
+import { toast } from "react-toastify";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -24,6 +25,8 @@ const formatDate = (val) => {
 
 export function MemberList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
+  const isAdmin = !!localStorage.getItem("adminToken");
+  const canCancel = isSuperAdmin || isAdmin;
 
   const headers = [
     "Sl. No.",
@@ -35,11 +38,16 @@ export function MemberList() {
   ];
   const [Memberdetails, SetMemberDetails] = useState([]);
   const [typeFilter, setTypeFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | active | cancelled
   const [search, setSearch] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  const [showCancelPopup, setShowCancelPopup] = useState(false);
+  const [cancelPdf, setCancelPdf] = useState(null);
+  const [cancelPenalty, setCancelPenalty] = useState("");
+  const [cancellingMember, setCancellingMember] = useState(null);
 
   useEffect(() => {
     axios
@@ -59,9 +67,17 @@ export function MemberList() {
         !q ||
         (m.name || "").toLowerCase().includes(q) ||
         (m.membership_id || "").toLowerCase().includes(q);
-      return matchesType && matchesSearch;
+      const matchesStatus =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "cancelled"
+            ? !!m.cancelled
+            : !m.cancelled;
+      return matchesType && matchesSearch && matchesStatus;
     });
-  }, [Memberdetails, typeFilter, search]);
+  }, [Memberdetails, typeFilter, search, statusFilter]);
+
+  const cancelledCount = Memberdetails.filter((m) => m.cancelled).length;
 
   const handleViewDetails = (member) => {
     setSelectedMember(member);
@@ -99,10 +115,74 @@ export function MemberList() {
     }
   };
 
+  const handleCancelClick = (member) => {
+    setCancellingMember(member);
+    setCancelPenalty("");
+    setShowCancelPopup(true);
+  };
+
+  const handleCancelPdfChange = (e) => {
+    setCancelPdf(e.target.files[0]);
+  };
+
+  const handleCancelOk = async () => {
+    if (!cancelPdf) {
+      toast.error("Please upload a cancellation PDF!");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("cancellationPdf", cancelPdf);
+    formData.append("memberId", cancellingMember._id);
+    const penaltyValue = Number(cancelPenalty) || 0;
+    formData.append("penaltyAmount", penaltyValue);
+
+    const token =
+      localStorage.getItem("superAdminToken") ||
+      localStorage.getItem("adminToken");
+
+    try {
+      await axios.post(`${API_BASE}/member/cancel`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const updateCancelled = (list) =>
+        list.map((m) =>
+          m._id === cancellingMember._id
+            ? { ...m, cancelled: true, cancellationPenalty: penaltyValue }
+            : m,
+        );
+      SetMemberDetails((prev) => updateCancelled(prev));
+      if (selectedMember?._id === cancellingMember._id) {
+        setSelectedMember((prev) => ({
+          ...prev,
+          cancelled: true,
+          cancellationPenalty: penaltyValue,
+        }));
+      }
+      toast.success("Membership cancelled successfully!");
+      setShowCancelPopup(false);
+      setCancelPdf(null);
+      setCancelPenalty("");
+      setCancellingMember(null);
+    } catch (err) {
+      console.error("Cancellation error", err);
+      toast.error("Failed to submit cancellation.");
+    }
+  };
+
+  const handleCancelPopupClose = () => {
+    setShowCancelPopup(false);
+    setCancelPdf(null);
+    setCancelPenalty("");
+    setCancellingMember(null);
+  };
+
   const field = (label, name, value) => (
     <div className="border-b border-gray-200 pb-4">
       <dt className="inline font-semibold">{label}: </dt>
-      {isEditing ? (
+      {isEditing && !selectedMember?.cancelled ? (
         <input
           name={name}
           value={editData[name] || ""}
@@ -142,6 +222,36 @@ export function MemberList() {
           {filteredMembers.length} member
           {filteredMembers.length === 1 ? "" : "s"}
         </span>
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          {[
+            ["all", "All"],
+            ["active", "Active"],
+            ["cancelled", "Cancelled"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setStatusFilter(key)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                statusFilter === key
+                  ? "bg-[#EF742C] text-white shadow"
+                  : "text-gray-600 hover:text-[#EF742C]"
+              }`}
+            >
+              {label}
+              {key === "cancelled" && cancelledCount > 0 && (
+                <span
+                  className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                    statusFilter === key
+                      ? "bg-white/25 text-white"
+                      : "bg-red-100 text-red-600"
+                  }`}
+                >
+                  {cancelledCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="w-full max-w-[1120px] mx-auto p-6">
         <div className="overflow-hidden rounded-2xl shadow-lg">
@@ -162,7 +272,9 @@ export function MemberList() {
               {filteredMembers.map((member, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  className="border-b border-gray-200 text-start text-[14px] hover:bg-orange-50 transition-colors duration-200"
+                  className={`border-b border-gray-200 text-start text-[14px] transition-colors duration-200 ${
+                    member.cancelled ? "bg-red-50" : "hover:bg-orange-50"
+                  }`}
                 >
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {rowIndex + 1}
@@ -179,13 +291,28 @@ export function MemberList() {
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {member.membershiptype || "-"}
                   </td>
-                  <td>
-                    <button
-                      onClick={() => handleViewDetails(member)}
-                      className="w-[170px] font-medium border-1 py-[6px] px-[10px] border-[#08A25C] rounded text-[14px] text-[#08A25C] hover:bg-[#08A25C] hover:text-white transition-colors duration-200"
-                    >
-                      View Details
-                    </button>
+                  <td className="px-6 py-4">
+                    <div className="flex justify-center items-center gap-2">
+                      <button
+                        onClick={() => handleViewDetails(member)}
+                        className="w-[170px] font-medium border-1 py-[6px] px-[10px] border-[#08A25C] rounded text-[14px] text-[#08A25C] hover:bg-[#08A25C] hover:text-white transition-colors duration-200"
+                      >
+                        View Details
+                      </button>
+                      {member.cancelled && (
+                        <span className="bg-red-100 text-red-600 text-center text-xs font-semibold px-2 py-1 rounded-full">
+                          Cancelled
+                        </span>
+                      )}
+                      {canCancel && !member.cancelled && (
+                        <button
+                          onClick={() => handleCancelClick(member)}
+                          className="w-[100px] font-medium border-1 py-[6px] px-[10px] border-red-500 rounded text-[14px] text-red-500 hover:bg-red-500 hover:text-white transition-colors duration-200"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -227,38 +354,52 @@ export function MemberList() {
                 <span className="font-medium">Back to Member List</span>
               </button>
 
-              {/* Edit/Save buttons - only for superadmin */}
-              {isSuperAdmin && (
-                <div className="flex gap-2">
-                  {isEditing ? (
-                    <>
+              <div className="flex items-center gap-3">
+                {selectedMember.cancelled && (
+                  <span className="bg-red-100 text-red-600 text-sm font-semibold px-4 py-2 rounded-full border border-red-300">
+                    ✕ Cancelled
+                  </span>
+                )}
+
+                {/* Edit/Save buttons - only for superadmin, and not once cancelled */}
+                {isSuperAdmin && !selectedMember.cancelled && (
+                  <div className="flex gap-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={handleSave}
+                          className="bg-[#EF742C] text-white px-4 py-2 rounded-full font-semibold hover:opacity-90"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setIsEditing(false)}
+                          className="border border-gray-400 text-gray-600 px-4 py-2 rounded-full font-semibold hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
                       <button
-                        onClick={handleSave}
-                        className="bg-[#EF742C] text-white px-4 py-2 rounded-full font-semibold hover:opacity-90"
+                        onClick={() => setIsEditing(true)}
+                        className="bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white px-6 py-2 rounded-full font-semibold hover:opacity-90"
                       >
-                        Save
+                        Edit
                       </button>
-                      <button
-                        onClick={() => setIsEditing(false)}
-                        className="border border-gray-400 text-gray-600 px-4 py-2 rounded-full font-semibold hover:bg-gray-100"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white px-6 py-2 rounded-full font-semibold hover:opacity-90"
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="px-6 pb-6">
-              <div className="bg-white border border-gray-200 rounded-2xl p-6">
+              <div
+                className={`bg-white border rounded-2xl p-6 ${
+                  selectedMember.cancelled
+                    ? "border-red-300"
+                    : "border-gray-200"
+                }`}
+              >
                 <div className="flex justify-between items-start">
                   <h2 className="text-2xl font-semibold">Member Details</h2>
                   <div className="w-16 h-16 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
@@ -424,6 +565,52 @@ export function MemberList() {
                     )}
                   </div>
                 </dl>
+
+                {/* Cancellation details */}
+                {selectedMember.cancelled && (
+                  <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                    <h3 className="font-semibold text-[15px] mb-3 text-red-600">
+                      Cancellation Details
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">
+                          Penalty Amount:{" "}
+                        </span>
+                        <span className="text-red-600 font-semibold">
+                          ₹
+                          {Number(
+                            selectedMember.cancellationPenalty || 0,
+                          ).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      {selectedMember.cancelledAt && (
+                        <div>
+                          <span className="font-semibold text-gray-600">
+                            Cancelled On:{" "}
+                          </span>
+                          <span>
+                            {new Date(
+                              selectedMember.cancelledAt,
+                            ).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                      {selectedMember.cancellationPdfUrl && (
+                        <div className="col-span-2">
+                          <a
+                            href={selectedMember.cancellationPdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#EF742C] font-medium hover:underline"
+                          >
+                            📎 View Cancellation Document
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Documents Section */}
                 {(selectedMember.aadharcard ||
@@ -647,6 +834,92 @@ export function MemberList() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Popup */}
+      {showCancelPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[500px] p-6">
+            <h2 className="text-xl font-semibold mb-2">Cancel Membership</h2>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to cancel the membership for{" "}
+              <span className="font-semibold text-[#EF742C]">
+                {cancellingMember?.name}
+              </span>
+              ? Please upload a cancellation PDF to proceed.
+            </p>
+            <div className="border-2 border-dashed border-[#EF742C] rounded-xl p-6 text-center mb-4">
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={handleCancelPdfChange}
+                className="hidden"
+                id="cancelPdfInput"
+              />
+              <label htmlFor="cancelPdfInput" className="cursor-pointer">
+                <div className="flex flex-col items-center gap-2">
+                  <svg
+                    className="w-10 h-10 text-[#EF742C]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                    />
+                  </svg>
+                  <span className="text-[#EF742C] font-medium">
+                    {cancelPdf
+                      ? cancelPdf.name
+                      : "Click to upload cancellation PDF"}
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* Optional penalty amount */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Penalty Amount{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={cancelPenalty}
+                  onChange={(e) => setCancelPenalty(e.target.value)}
+                  placeholder="0"
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Leave blank or 0 if no penalty is being charged.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelPopupClose}
+                className="px-6 py-2 border border-gray-400 text-gray-600 rounded-full font-semibold hover:bg-gray-100"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleCancelOk}
+                className="px-6 py-2 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600"
+              >
+                OK - Submit Cancellation
+              </button>
             </div>
           </div>
         </div>
