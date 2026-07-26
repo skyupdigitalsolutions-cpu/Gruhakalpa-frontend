@@ -23,6 +23,50 @@ const formatDate = (val) => {
   return String(val);
 };
 
+// Split a membership ID into alternating text / number chunks so that numeric
+// segments compare as NUMBERS, not as text. A plain string sort only looks
+// correct while every number is zero-padded to the same width — the moment a
+// "GK2023P1000" (or an unpadded legacy "GK2023P9") shows up, a string sort puts
+// "GK2023P1000" before "GK2023P999". This also keeps different prefixes
+// (GK / NCS / NCG) grouped together and ordered by year, then by number.
+//   "GK2023P001" -> ["GK", 2023, "P", 1]
+const idChunks = (val) =>
+  String(val ?? "")
+    .trim()
+    .toUpperCase()
+    .split(/(\d+)/)
+    .filter((part) => part !== "");
+
+const compareMembershipId = (a, b) => {
+  const A = idChunks(a);
+  const B = idChunks(b);
+
+  // Members with no ID sort to the bottom rather than crowding the top.
+  if (!A.length || !B.length) return A.length ? -1 : B.length ? 1 : 0;
+
+  const len = Math.max(A.length, B.length);
+  for (let i = 0; i < len; i++) {
+    const x = A[i];
+    const y = B[i];
+    // Shorter ID that matched so far is the smaller one ("GK2023P1" < "GK2023P1A")
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+
+    const xIsNum = /^\d+$/.test(x);
+    const yIsNum = /^\d+$/.test(y);
+
+    if (xIsNum && yIsNum) {
+      const diff = Number(x) - Number(y);
+      if (diff !== 0) return diff;
+    } else if (x !== y) {
+      // Numeric chunks sort before text chunks at the same position.
+      if (xIsNum !== yIsNum) return xIsNum ? -1 : 1;
+      return x < y ? -1 : 1;
+    }
+  }
+  return 0;
+};
+
 export function MemberList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
   const isAdmin = !!localStorage.getItem("adminToken");
@@ -60,21 +104,26 @@ export function MemberList() {
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return Memberdetails.filter((m) => {
-      const matchesType =
-        typeFilter === "All" || m.membershiptype === typeFilter;
-      const matchesSearch =
-        !q ||
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.membership_id || "").toLowerCase().includes(q);
-      const matchesStatus =
-        statusFilter === "all"
-          ? true
-          : statusFilter === "cancelled"
-            ? !!m.cancelled
-            : !m.cancelled;
-      return matchesType && matchesSearch && matchesStatus;
-    });
+    return (
+      Memberdetails.filter((m) => {
+        const matchesType =
+          typeFilter === "All" || m.membershiptype === typeFilter;
+        const matchesSearch =
+          !q ||
+          (m.name || "").toLowerCase().includes(q) ||
+          (m.membership_id || "").toLowerCase().includes(q);
+        const matchesStatus =
+          statusFilter === "all"
+            ? true
+            : statusFilter === "cancelled"
+              ? !!m.cancelled
+              : !m.cancelled;
+        return matchesType && matchesSearch && matchesStatus;
+      })
+        // .filter() already returned a fresh array, so sorting in place is safe
+        // and never mutates Memberdetails.
+        .sort((a, b) => compareMembershipId(a.membership_id, b.membership_id))
+    );
   }, [Memberdetails, typeFilter, search, statusFilter]);
 
   const cancelledCount = Memberdetails.filter((m) => m.cancelled).length;
