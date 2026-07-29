@@ -23,13 +23,40 @@ const formatDate = (val) => {
   return String(val);
 };
 
-// Split a membership ID into alternating text / number chunks so that numeric
-// segments compare as NUMBERS, not as text. A plain string sort only looks
-// correct while every number is zero-padded to the same width — the moment a
-// "GK2023P1000" (or an unpadded legacy "GK2023P9") shows up, a string sort puts
-// "GK2023P1000" before "GK2023P999". This also keeps different prefixes
-// (GK / NCS / NCG) grouped together and ordered by year, then by number.
-//   "GK2023P001" -> ["GK", 2023, "P", 1]
+// A membership ID packs four things together: a series prefix, the year it was
+// issued, the membership type letter, and the member's sequence number —
+// "GK2024P1176". The sequence number is what everyone means by "membership
+// order", and it runs UNBROKEN across years and types: GK2024P1338 is followed
+// immediately by GK2025A1339.
+//
+// So the sequence number must be the PRIMARY sort key. Comparing the ID chunk
+// by chunk from the left instead makes the year the first tiebreaker and the
+// type letter the second, which splits one continuous run into separate blocks
+// (GK2024A, GK2024P, GK2025A, GK2025P) with the numbering restarting in each —
+// that is why everything from 1176 onwards looked out of order.
+//
+// The prefix still groups first, so GK / NCS / NCG stay in their own runs;
+// those are independent numbering series and interleaving them would be wrong.
+
+// Leading letters of the ID. "GK2024P1176" -> "GK"
+const idPrefix = (val) =>
+  (String(val ?? "")
+    .trim()
+    .toUpperCase()
+    .match(/^[A-Z]+/) || [""])[0];
+
+// LAST run of digits in the ID = the sequence number. Taking the last group
+// rather than the first is what skips over the year.
+//   "GK2024P1176" -> 1176      "GK2025A1339" -> 1339
+const idSequence = (val) => {
+  const groups = String(val ?? "").match(/\d+/g);
+  return groups ? Number(groups[groups.length - 1]) : null;
+};
+
+// Split an ID into alternating text / number chunks, used only as a tiebreaker
+// now. Numeric segments still compare as NUMBERS, not as text, so an unpadded
+// legacy "GK2023P9" never sorts after "GK2023P1000".
+//   "GK2023P001" -> ["GK", "2023", "P", "001"]
 const idChunks = (val) =>
   String(val ?? "")
     .trim()
@@ -37,13 +64,7 @@ const idChunks = (val) =>
     .split(/(\d+)/)
     .filter((part) => part !== "");
 
-const compareMembershipId = (a, b) => {
-  const A = idChunks(a);
-  const B = idChunks(b);
-
-  // Members with no ID sort to the bottom rather than crowding the top.
-  if (!A.length || !B.length) return A.length ? -1 : B.length ? 1 : 0;
-
+const compareChunks = (A, B) => {
   const len = Math.max(A.length, B.length);
   for (let i = 0; i < len; i++) {
     const x = A[i];
@@ -65,6 +86,29 @@ const compareMembershipId = (a, b) => {
     }
   }
   return 0;
+};
+
+const compareMembershipId = (a, b) => {
+  const aId = String(a ?? "").trim();
+  const bId = String(b ?? "").trim();
+
+  // Members with no ID sort to the bottom rather than crowding the top.
+  if (!aId || !bId) return aId ? -1 : bId ? 1 : 0;
+
+  // 1. Series prefix (GK / NCS / NCG) — separate numbering series stay grouped.
+  const prefixDiff = idPrefix(aId).localeCompare(idPrefix(bId));
+  if (prefixDiff !== 0) return prefixDiff;
+
+  // 2. Sequence number — the actual membership order.
+  const aSeq = idSequence(aId);
+  const bSeq = idSequence(bId);
+  if (aSeq === null && bSeq !== null) return 1;
+  if (bSeq === null && aSeq !== null) return -1;
+  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) return aSeq - bSeq;
+
+  // 3. Same sequence number (a re-issue, or a "-A" style suffix): fall back to
+  //    the full chunk-wise compare so the ordering is still deterministic.
+  return compareChunks(idChunks(aId), idChunks(bId));
 };
 
 export function MemberList() {
