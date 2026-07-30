@@ -23,6 +23,18 @@ const yearOptions = Array.from(
   (_, i) => MIN_YEAR + i,
 );
 
+// Width of the numeric part of a membership id.
+//
+// Society records use FOUR digits. Ids from 1000 up already carry four
+// (GK2023P1005); anything below 1000 was historically stored with three
+// (GK2023P003) and is being repadded to match — 003 becomes 0003.
+//
+// This constant MUST stay in step with the stored data. If it says 3 while the
+// database holds 4-digit ids, every lookup an admin performs will build an id
+// that no member record has, and the form will report "member not found" with
+// no explanation. Run scripts/migrateMembershipIdTo4Digits.js when changing it.
+const MEMBERSHIP_DIGITS = 4;
+
 // Build full membership ID: CODE + year + optional series letter + zero-padded
 // number, e.g. GK2026005 (no letter) or GK2024A001 / GK2024P001 (with one).
 //
@@ -36,7 +48,7 @@ const buildMembershipId = (projectCode, year, number) => {
   const [, letters, digits] = parts;
   // A lone letter with no digits yet is an incomplete id, not a valid one.
   if (!digits) return "";
-  return `${projectCode}${year}${letters}${digits.padStart(3, "0")}`;
+  return `${projectCode}${year}${letters}${digits.padStart(MEMBERSHIP_DIGITS, "0")}`;
 };
 
 // Digits only, ignoring any series letter — used to decide when the typed
@@ -352,7 +364,7 @@ export function FixedDepositForm() {
                   </span>
                   <input
                     type="text"
-                    placeholder="001 or A001"
+                    placeholder="0001 or P0001"
                     value={membershipInput}
                     onChange={handleMembershipInput}
                     maxLength={5}
