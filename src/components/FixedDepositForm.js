@@ -13,13 +13,35 @@ const PROJECTS = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const yearOptions = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - 2 + i);
+// 2023 is the society's registration year and must always stay selectable —
+// a rolling window silently dropped it as the calendar advanced. Matches the
+// MIN_YEAR floor used in ReceiptForm.js and SiteBookingForm.js.
+const MIN_YEAR = 2023;
+const YEARS_FORWARD = 3;
+const yearOptions = Array.from(
+  { length: Math.max(CURRENT_YEAR + YEARS_FORWARD - MIN_YEAR + 1, 1) },
+  (_, i) => MIN_YEAR + i,
+);
 
-// Build full membership ID: CODE + year + zero-padded number e.g. GK2026005
+// Build full membership ID: CODE + year + optional series letter + zero-padded
+// number, e.g. GK2026005 (no letter) or GK2024A001 / GK2024P001 (with one).
+//
+// The series letter must be kept OUT of the zero-padding. Padding the whole
+// string would turn "A1" into "0A1" and produce GK20240A1, which matches no
+// member record — the letter is part of the identifier, not part of the count.
 const buildMembershipId = (projectCode, year, number) => {
   if (!projectCode || !year || !number) return "";
-  return `${projectCode}${year}${String(number).padStart(3, "0")}`;
+  const parts = String(number).toUpperCase().match(/^([A-Z]*)(\d*)$/);
+  if (!parts) return "";
+  const [, letters, digits] = parts;
+  // A lone letter with no digits yet is an incomplete id, not a valid one.
+  if (!digits) return "";
+  return `${projectCode}${year}${letters}${digits.padStart(3, "0")}`;
 };
+
+// Digits only, ignoring any series letter — used to decide when the typed
+// number is complete enough to trigger a member lookup.
+const membershipDigitCount = (v) => String(v || "").replace(/\D/g, "").length;
 
 // ── Compact Indian number-to-words (preview only; backend is authoritative) ──
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -111,7 +133,7 @@ export function FixedDepositForm() {
 
   // Debounced member lookup once a complete number is entered
   useEffect(() => {
-    if (membershipInput.length >= 3 && membershipId) {
+    if (membershipDigitCount(membershipInput) >= 3 && membershipId) {
       const t = setTimeout(() => lookupMember(membershipId), 500);
       return () => clearTimeout(t);
     }
@@ -244,8 +266,15 @@ export function FixedDepositForm() {
   const interestAmount = principal && rate ? (principal * rate * (termDays / 365)) / 100 : 0;
   const maturityAmount = principal + interestAmount;
 
-  const handleMembershipInput = (e) =>
-    setMembershipInput(e.target.value.replace(/\D/g, "").slice(0, 4));
+  const handleMembershipInput = (e) => {
+    // Accepts an OPTIONAL single series letter followed by up to 4 digits:
+    // "005", "A001", "P001". The letter is auto-uppercased and must come
+    // first — a letter typed after the digits is ignored rather than silently
+    // reordered, so what the admin sees is exactly what gets submitted.
+    const raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const parts = raw.match(/^([A-Z]?)(\d{0,4})/);
+    setMembershipInput(parts ? `${parts[1]}${parts[2]}` : "");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -323,10 +352,10 @@ export function FixedDepositForm() {
                   </span>
                   <input
                     type="text"
-                    placeholder="001"
+                    placeholder="001 or A001"
                     value={membershipInput}
                     onChange={handleMembershipInput}
-                    maxLength={4}
+                    maxLength={5}
                     className="flex-1 px-3 py-2.5 text-sm focus:outline-none w-full"
                   />
                   {checking && <span className="flex items-center px-2 text-xs text-gray-400 animate-pulse">…</span>}

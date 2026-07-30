@@ -398,11 +398,15 @@ const PROJECTS = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEARS_BACK = 2;
+// 2023 is the society's registration year, so it must always stay selectable.
+// A rolling "YEARS_BACK" window silently dropped it as the calendar advanced —
+// anchoring to a fixed floor instead means it can never disappear again.
+// Kept identical to ReceiptForm.js so both forms always offer the same years.
+const MIN_YEAR = 2023;
 const YEARS_FORWARD = 3;
 const yearOptions = Array.from(
-  { length: YEARS_BACK + YEARS_FORWARD + 1 },
-  (_, i) => CURRENT_YEAR - YEARS_BACK + i,
+  { length: Math.max(CURRENT_YEAR + YEARS_FORWARD - MIN_YEAR + 1, 1) },
+  (_, i) => MIN_YEAR + i,
 ).map((y) => ({ label: String(y), value: String(y) }));
 
 // Site dimensions per project — edit to match your real projects
@@ -418,12 +422,25 @@ const parseDimension = (dim) => {
   return w * l;
 };
 
-// Build full membership ID: CODE + year + zero-padded number e.g. GK2026005
+// Build full membership ID: CODE + year + optional series letter + zero-padded
+// number, e.g. GK2026005 (no letter) or GK2024A001 / GK2024P001 (with one).
+//
+// The series letter must be kept OUT of the zero-padding. Padding the whole
+// string would turn "A1" into "0A1" and produce GK20240A1, which matches no
+// member record — the letter is part of the identifier, not part of the count.
 const buildMembershipId = (projectCode, year, number) => {
   if (!projectCode || !year || !number) return "";
-  const padded = String(number).padStart(3, "0");
-  return `${projectCode}${year}${padded}`;
+  const parts = String(number).toUpperCase().match(/^([A-Z]*)(\d*)$/);
+  if (!parts) return "";
+  const [, letters, digits] = parts;
+  // A lone letter with no digits yet is an incomplete id, not a valid one.
+  if (!digits) return "";
+  return `${projectCode}${year}${letters}${digits.padStart(3, "0")}`;
 };
+
+// Digits only, ignoring any series letter — used to decide when the typed
+// number is complete enough to trigger a member lookup.
+const membershipDigitCount = (v) => String(v || "").replace(/\D/g, "").length;
 
 export function SiteBookingForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -516,13 +533,14 @@ export function SiteBookingForm() {
         .required("Total amount is required")
         .positive("Amount must be greater than 0"),
       Designation: yup.string().optional(),
-      // Validate format: 2-5 letter code + 4-digit year + 3-4 digit number e.g. GK2026005
+      // Format: 2-5 letter code + 4-digit year + OPTIONAL single series letter
+      // + 3-4 digit number, e.g. GK2026005 or GK2024A001.
       MembershipId: yup
         .string()
         .required("Membership number required")
         .matches(
-          /^[A-Z]{2,5}\d{4}\d{3,4}$/,
-          "Invalid format (e.g., GK2026005)",
+          /^[A-Z]{2,5}\d{4}[A-Z]?\d{3,4}$/,
+          "Invalid format (e.g., GK2026005 or GK2024A001)",
         ),
     }),
     validateOnChange: false,
@@ -694,8 +712,10 @@ export function SiteBookingForm() {
       setFullMembershipId(fullId);
       formik.setFieldValue("MembershipId", fullId);
 
-      // Only fetch when the user has typed a complete number (3–4 digits)
-      if (membershipInput.length >= 3) {
+      // Only fetch once 3-4 DIGITS are present. Counting characters instead
+      // would fire on "A00" — 3 characters but only 2 digits — and flash
+      // "not found" at the admin while they were still typing.
+      if (membershipDigitCount(membershipInput) >= 3) {
         const timer = setTimeout(() => {
           fetchMemberDetails(fullId);
         }, 500); // debounce: wait 500ms after user stops typing
@@ -779,9 +799,13 @@ export function SiteBookingForm() {
   };
 
   const handleMembershipInputChange = (e) => {
-    // Only allow digits, max 4 digits
-    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-    setMembershipInput(value);
+    // Accepts an OPTIONAL single series letter followed by up to 4 digits:
+    // "005", "A001", "P001". The letter is auto-uppercased and must come
+    // first — a letter typed after the digits is ignored rather than silently
+    // reordered, so what the admin sees is exactly what gets submitted.
+    const raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const parts = raw.match(/^([A-Z]?)(\d{0,4})/);
+    setMembershipInput(parts ? `${parts[1]}${parts[2]}` : "");
   };
 
   const handleFamilyChange = (index, field, value) => {
@@ -949,10 +973,10 @@ export function SiteBookingForm() {
                 </span>
                 <input
                   type="text"
-                  placeholder="001"
+                  placeholder="001 or A001"
                   value={membershipInput}
                   onChange={handleMembershipInputChange}
-                  maxLength="4"
+                  maxLength="5"
                   disabled={!formik.values.ProjectName || !formik.values.Year}
                   className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white disabled:bg-gray-50 disabled:cursor-not-allowed"
                 />
