@@ -233,6 +233,23 @@ export function SideBar({ prefix = "" }) {
 
           <li className="mt-3">
             <Link
+              to={`${prefix}/festivals`}
+              className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
+                isActive(`${prefix}/festivals`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
+              }`}
+            >
+              <img
+                src={isActive(`${prefix}/festivals`) ? "/images/green_account_balance_wallet.svg" : "/images/payment_icon.svg"}
+                alt="Festivals"
+              />
+              <span className={isActive(`${prefix}/festivals`) ? "text-[#456116] font-semibold" : "text-white"}>
+                Festivals
+              </span>
+            </Link>
+          </li>
+
+          <li className="mt-3">
+            <Link
               to={`${prefix}/bankstatement`}
               className={`flex py-1 rounded-s-xl px-4 gap-4 no-underline text-[20px] transition-all ${
                 isActive(`${prefix}/bankstatement`) ? "bg-[#FFFF]" : "hover:border hover:border-white"
