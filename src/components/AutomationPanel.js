@@ -175,9 +175,12 @@ function Panel({ token, onLogout }) {
     setBusyKey("staff_test");
     try {
       const res = await axios.post(`${API_BASE}/automation/test-staff`, {}, auth);
-      res.data.success
-        ? toast.success(`Staff reminder sent for: ${(res.data.festivals || []).join(", ")}`)
-        : toast.error(res.data.message || "Staff test failed");
+      if (res.data.success) {
+        // Show the honest result — includes any per-number failures.
+        toast.success(res.data.message || `Staff reminder sent for: ${(res.data.festivals || []).join(", ")}`);
+      } else {
+        toast.error(res.data.message || "Staff test failed");
+      }
     } catch (e) {
       toast.error(e.response?.data?.message || "Staff test failed");
     } finally { setBusyKey(""); }
