@@ -5,6 +5,42 @@ import { generateReceiptPDF } from "../utils/generateReceiptPDF";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
+// ── Membership Id formatting (parity with ReceiptForm) ──
+//
+// ReceiptForm builds ids as CODE + 4-digit YEAR + OPTIONAL single series
+// letter + zero-padded number, e.g. GK20260005 / GK2023P0003.
+//
+// Receipts already in the database were written under the old 3-digit rule
+// (GK2023P003) or with no padding at all (GK20265), so the list has to
+// re-pad on read instead of trusting the stored string. Keep this constant
+// in step with MEMBERSHIP_DIGITS in ReceiptForm — if the two ever disagree,
+// the list will display ids that the form's lookup can never build.
+const MEMBERSHIP_DIGITS = 4;
+
+// The stored value exactly as the backend has it (canonical field is
+// `membershipid`; older receipts may only carry the legacy `seniority_no`).
+const getRawMembershipId = (receipt) =>
+  receipt?.membershipid || receipt?.seniority_no || "";
+
+// Normalise a stored id into the form's canonical shape.
+//
+// The series letter is deliberately kept OUT of the padding — padding the
+// whole tail would turn "P3" into "00P3" and produce an id that matches no
+// member record. Anything that doesn't parse is returned untouched rather
+// than mangled, so a malformed legacy id is still visible to the admin.
+const formatMembershipId = (raw) => {
+  const value = String(raw || "").trim().toUpperCase();
+  if (!value) return "";
+  const parts = value.match(/^([A-Z]{2,5})(\d{4})([A-Z]?)(\d+)$/);
+  if (!parts) return value;
+  const [, code, year, letter, digits] = parts;
+  return `${code}${year}${letter}${digits.padStart(MEMBERSHIP_DIGITS, "0")}`;
+};
+
+// Display helper used everywhere the id is rendered.
+const getMembershipId = (receipt) =>
+  formatMembershipId(getRawMembershipId(receipt));
+
 export function ReceiptList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
   const headers = [
@@ -24,11 +60,6 @@ export function ReceiptList() {
   const [editData, setEditData] = useState({});
   const [downloadingId, setDownloadingId] = useState(null);
   const [memberImage, setMemberImage] = useState(null);
-
-  // Resolve the membership id off a receipt (canonical field is `membershipid`,
-  // older receipts may only carry the legacy `seniority_no`)
-  const getMembershipId = (receipt) =>
-    receipt?.membershipid || receipt?.seniority_no || "";
 
   // Download receipt PDF — same format as ReceiptForm
   const handleDownloadReceipt = async (receipt) => {
@@ -54,16 +85,26 @@ export function ReceiptList() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === "") {
+    const query = searchQuery.trim();
+    if (query === "") {
       setFilteredMembers(Memberdetails);
-    } else {
-      const filtered = Memberdetails.filter((member) =>
-        getMembershipId(member)
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()),
-      );
-      setFilteredMembers(filtered);
+      return;
     }
+    const q = query.toLowerCase();
+    // Normalising the query too means an admin can type the id either way —
+    // "GK2023P3", "GK2023P003" and "GK2023P0003" all find the same receipt,
+    // regardless of which padding the record was stored with.
+    const normalizedQuery = formatMembershipId(query).toLowerCase();
+    const filtered = Memberdetails.filter((member) => {
+      const raw = getRawMembershipId(member).toLowerCase();
+      const formatted = getMembershipId(member).toLowerCase();
+      return (
+        raw.includes(q) ||
+        formatted.includes(q) ||
+        (!!normalizedQuery && formatted.includes(normalizedQuery))
+      );
+    });
+    setFilteredMembers(filtered);
   }, [searchQuery, Memberdetails]);
 
   const handleSearchChange = (e) => setSearchQuery(e.target.value);
@@ -76,12 +117,15 @@ export function ReceiptList() {
     setIsEditing(false);
     setMemberImage(null);
 
-    // Fetch member profile image using membership_id
+    // Fetch member profile image using membership_id.
+    // Both sides are normalised before comparing — the member record and the
+    // receipt can legitimately carry different padding for the same person.
     try {
       const res = await axios.get(`${API_BASE}/members`);
       const members = res.data.data || [];
+      const target = getMembershipId(member);
       const found = members.find(
-        (m) => m.membership_id === getMembershipId(member),
+        (m) => formatMembershipId(m.membership_id) === target,
       );
       if (found?.image) setMemberImage(found.image);
     } catch (err) {
