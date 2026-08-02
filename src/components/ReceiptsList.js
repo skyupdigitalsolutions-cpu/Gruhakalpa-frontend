@@ -588,7 +588,13 @@ export function ReceiptList() {
                     "paymenttype",
                     selectedMember.paymenttype,
                   )}
-                  {/* Paid Amount — split membership fee for new users */}
+                  {/* Paid Amount — shown exactly as stored.
+                      The ₹2,500 membership fee used to be subtracted here when
+                      is_new_user was set, and displayed as a separate line. The
+                      membership fee now has its own receipt raised from the
+                      Membership form, so deducting it again made this modal
+                      under-report every first receipt by ₹2,500 against what
+                      the printed PDF and the list row both showed. */}
                   <div className="border-b border-gray-200 pb-4">
                     <dt className="inline font-semibold">Paid Amount: </dt>
                     {isEditing && !selectedMember?.cancelled ? (
@@ -600,24 +606,13 @@ export function ReceiptList() {
                       />
                     ) : (
                       <dd className="inline font-normal">
-                        ₹{(
-                          selectedMember.is_new_user
-                            ? (parseFloat(selectedMember.amountpaid) || 0) - 2500
-                            : (parseFloat(selectedMember.amountpaid) || 0)
+                        ₹
+                        {(
+                          parseFloat(selectedMember.amountpaid) || 0
                         ).toLocaleString("en-IN")}
                       </dd>
                     )}
                   </div>
-                  {/* Membership Fee — only for new users */}
-                  {selectedMember.is_new_user && (
-                    <div className="border-b border-gray-200 pb-4">
-                      <dt className="inline font-semibold">Membership Fee: </dt>
-                      <dd className="inline font-semibold text-blue-600 ml-1">₹2,500</dd>
-                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                        New Member
-                      </span>
-                    </div>
-                  )}
                   {editField(
                     "Payment Mode",
                     "paymentmode",
