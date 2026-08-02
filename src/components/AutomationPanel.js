@@ -65,6 +65,7 @@ function Panel({ token, onLogout }) {
   const [staff, setStaff] = useState(null);
   const [upcoming, setUpcoming] = useState([]);
   const [master, setMaster] = useState(false);
+  const [waOn, setWaOn] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -83,10 +84,11 @@ function Panel({ token, onLogout }) {
         const u = await axios.get(`${API_BASE}/automation/upcoming?limit=2`, auth);
         setUpcoming(u.data.data || []);
       } catch (_) { /* optional */ }
-      // Load the master switch state.
+      // Load the master switch + automation WhatsApp state.
       try {
         const mm = await axios.get(`${API_BASE}/automation/master`, auth);
         setMaster(mm.data.festivalAutomationEnabled === true);
+        setWaOn(mm.data.whatsappEnabled === true);
       } catch (_) { /* optional */ }
     } catch (e) {
       if (e.response?.status === 401) { onLogout(); return; }
@@ -119,6 +121,18 @@ function Panel({ token, onLogout }) {
     patch(tpl, { enabled });
     try { await axios.put(`${API_BASE}/automation/templates/${tpl}`, { enabled }, auth); }
     catch (e) { toast.error("Save failed"); }
+  };
+
+  // Automation's OWN WhatsApp on/off (independent of the admin channel).
+  const setWhatsappSwitch = async (enabled) => {
+    setBusyKey("wa");
+    try {
+      await axios.put(`${API_BASE}/automation/whatsapp`, { enabled }, auth);
+      setWaOn(enabled);
+      toast.success(enabled ? "Automation WhatsApp ON" : "Automation WhatsApp OFF");
+    } catch (e) {
+      toast.error("Could not update WhatsApp switch");
+    } finally { setBusyKey(""); }
   };
 
   // Master switch — the top-level kill switch. Nothing sends to members unless
@@ -198,6 +212,29 @@ function Panel({ token, onLogout }) {
             <div style={{ fontSize: 12, color: "#888" }}>Templates fetched live from MSG91. Dates auto-mapped. Just upload each image.</div>
           </div>
           <button onClick={onLogout} style={{ ...btn, background: "#eee", color: "#333" }}>Sign out</button>
+        </div>
+
+        {/* ── Automation WhatsApp channel (independent of admin) ── */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          background: waOn ? "#eef7ee" : "#fff6f6",
+          border: `2px solid ${waOn ? "#2e7d32" : "#e0a0a0"}`,
+          borderRadius: 12, padding: "12px 18px", margin: "14px 0 6px",
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: waOn ? "#2e7d32" : "#c0392b" }}>
+              Automation WhatsApp: {waOn ? "ON" : "OFF"}
+            </div>
+            <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+              This is the automation panel's own WhatsApp switch — separate from the admin settings. It must be ON to send festival greetings or staff reminders.
+            </div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: busyKey === "wa" ? "wait" : "pointer", flexShrink: 0 }}>
+            <span style={{ fontSize: 12, color: "#666" }}>{busyKey === "wa" ? "…" : (waOn ? "Turn OFF" : "Turn ON")}</span>
+            <input type="checkbox" disabled={busyKey === "wa"} checked={waOn}
+              onChange={(e) => setWhatsappSwitch(e.target.checked)}
+              style={{ width: 22, height: 22, accentColor: "#2e7d32" }} />
+          </label>
         </div>
 
         {/* ── MASTER kill-switch (top-level safety) ── */}
