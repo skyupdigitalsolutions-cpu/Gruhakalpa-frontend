@@ -10,9 +10,7 @@ import { ChevronDown, Check, Eye } from "lucide-react";
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
 // ── Projects Config (parity with SiteBookingForm) ──
-const PROJECTS = [
-  { name: "Gruhakalpa", code: "GK" },
-];
+const PROJECTS = [{ name: "Gruhakalpa", code: "GK" }];
 
 // ── Payment Type ──
 // A separate concern from Project Name. Project Name (below) always selects
@@ -22,7 +20,11 @@ const PROJECTS = [
 // Deposit against that same member: deposits skip Site Dimension and the
 // Site Booking requirement (the member must exist, but no booking is needed),
 // and get their own receipt layout, numbering prefix, and category on the backend.
-const PAYMENT_CATEGORIES = ["Site Payment", "Fixed Deposit", "Recurring Deposit"];
+const PAYMENT_CATEGORIES = [
+  "Site Payment",
+  "Fixed Deposit",
+  "Recurring Deposit",
+];
 const isDepositCategory = (category) =>
   category === "Fixed Deposit" || category === "Recurring Deposit";
 
@@ -57,7 +59,9 @@ const MEMBERSHIP_DIGITS = 4;
 // member record — the letter is part of the identifier, not part of the count.
 const buildMembershipId = (projectCode, year, number) => {
   if (!projectCode || !year || !number) return "";
-  const parts = String(number).toUpperCase().match(/^([A-Z]*)(\d*)$/);
+  const parts = String(number)
+    .toUpperCase()
+    .match(/^([A-Z]*)(\d*)$/);
   if (!parts) return "";
   const [, letters, digits] = parts;
   // A lone letter with no digits yet is an incomplete id, not a valid one.
@@ -68,6 +72,17 @@ const buildMembershipId = (projectCode, year, number) => {
 // Digits only, ignoring any series letter — used to decide when the typed
 // number is complete enough to trigger a member lookup.
 const membershipDigitCount = (v) => String(v || "").replace(/\D/g, "").length;
+
+// Resolve the membership id off a RECEIPT record.
+//
+// Three spellings exist across this codebase: this form POSTs `membershipid`,
+// older rows carry `seniority_no`, and some carry `membership_id`. Reading only
+// one of them made the "previous receipts" filter below return [] every time,
+// which zeroed out paidAmountsState and restarted the waterfall at Down Payment
+// on every single receipt — the second payment for a member was allocated to a
+// bucket that had already been settled.
+const receiptMembershipId = (r) =>
+  r?.membershipid || r?.membership_id || r?.seniority_no || "";
 
 // Default form values
 const defaultFormData = {
@@ -97,11 +112,7 @@ const defaultFormData = {
   chequeNo: "",
 };
 
-
-const OPTIONAL_FEE_ITEMS = [
-  "Deposits",
-  "Penalty",
-];
+const OPTIONAL_FEE_ITEMS = ["Deposits", "Penalty"];
 
 const INSTALLMENT_PAYMENT_NAMES = [
   "Down Payment",
@@ -182,7 +193,13 @@ const CustomSelect = ({
           ${disabled ? "bg-gray-100 cursor-not-allowed text-gray-400" : "cursor-pointer"}
           ${open ? "border-[#EF742C] ring-2 ring-[#EF742C]/20" : "border-gray-300 hover:border-[#EF742C]"}`}
       >
-        <span className={selectedOption ? "text-gray-800 font-medium truncate" : "text-gray-400 truncate"}>
+        <span
+          className={
+            selectedOption
+              ? "text-gray-800 font-medium truncate"
+              : "text-gray-400 truncate"
+          }
+        >
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
@@ -202,14 +219,18 @@ const CustomSelect = ({
               type="button"
               onClick={() => handleSelect(option.value)}
               className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-all duration-150
-                ${value === option.value
-                  ? "bg-orange-50 text-[#EF742C] font-medium"
-                  : "text-gray-700 hover:bg-gray-50"
+                ${
+                  value === option.value
+                    ? "bg-orange-50 text-[#EF742C] font-medium"
+                    : "text-gray-700 hover:bg-gray-50"
                 }`}
             >
               <span className="truncate">{option.label}</span>
               {value === option.value && (
-                <Check size={16} className="text-[#EF742C] flex-shrink-0 ml-2" />
+                <Check
+                  size={16}
+                  className="text-[#EF742C] flex-shrink-0 ml-2"
+                />
               )}
             </button>
           ))}
@@ -239,7 +260,20 @@ const CustomDatePicker = ({
   const [mode, setMode] = useState("day");
   const ref = useRef(null);
 
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const MONTHS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
   useEffect(() => {
@@ -264,10 +298,15 @@ const CustomDatePicker = ({
   const formatDisplay = (val) => {
     if (!val) return "";
     const d = new Date(val);
-    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
-  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getDaysInMonth = (year, month) =>
+    new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
   const handleDayClick = (day) => {
@@ -297,17 +336,24 @@ const CustomDatePicker = ({
   };
 
   const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
-    else setViewMonth((m) => m - 1);
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else setViewMonth((m) => m - 1);
   };
 
   const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
-    else setViewMonth((m) => m + 1);
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else setViewMonth((m) => m + 1);
   };
 
   const currentYear = new Date().getFullYear();
-  const yearRange = Array.from({ length: 101 }, (_, i) => currentYear - 100 + i).reverse();
+  const yearRange = Array.from(
+    { length: 101 },
+    (_, i) => currentYear - 100 + i,
+  ).reverse();
 
   const renderDayView = () => {
     const daysInMonth = getDaysInMonth(viewYear, viewMonth);
@@ -359,18 +405,34 @@ const CustomDatePicker = ({
           ${open ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-95 -translate-y-2 pointer-events-none"}`}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <button type="button" onClick={prevMonth} className="p-1 rounded-full hover:bg-orange-50 text-gray-500 hover:text-[#EF742C] transition-colors">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="p-1 rounded-full hover:bg-orange-50 text-gray-500 hover:text-[#EF742C] transition-colors"
+          >
             <ChevronDown size={16} className="rotate-90" />
           </button>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setMode(mode === "month" ? "day" : "month")} className="text-sm font-semibold text-gray-800 hover:text-[#EF742C] transition-colors px-1 py-0.5 rounded hover:bg-orange-50">
+            <button
+              type="button"
+              onClick={() => setMode(mode === "month" ? "day" : "month")}
+              className="text-sm font-semibold text-gray-800 hover:text-[#EF742C] transition-colors px-1 py-0.5 rounded hover:bg-orange-50"
+            >
               {MONTHS[viewMonth]}
             </button>
-            <button type="button" onClick={() => setMode(mode === "year" ? "day" : "year")} className="text-sm font-semibold text-gray-800 hover:text-[#EF742C] transition-colors px-1 py-0.5 rounded hover:bg-orange-50">
+            <button
+              type="button"
+              onClick={() => setMode(mode === "year" ? "day" : "year")}
+              className="text-sm font-semibold text-gray-800 hover:text-[#EF742C] transition-colors px-1 py-0.5 rounded hover:bg-orange-50"
+            >
               {viewYear}
             </button>
           </div>
-          <button type="button" onClick={nextMonth} className="p-1 rounded-full hover:bg-orange-50 text-gray-500 hover:text-[#EF742C] transition-colors">
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="p-1 rounded-full hover:bg-orange-50 text-gray-500 hover:text-[#EF742C] transition-colors"
+          >
             <ChevronDown size={16} className="-rotate-90" />
           </button>
         </div>
@@ -378,8 +440,15 @@ const CustomDatePicker = ({
         {mode === "month" && (
           <div className="grid grid-cols-3 gap-2 p-3">
             {MONTHS.map((m, i) => (
-              <button key={m} type="button" onClick={() => { setViewMonth(i); setMode("day"); }}
-                className={`py-2 rounded-lg text-xs font-medium transition-all duration-150 ${viewMonth === i ? "bg-[#EF742C] text-white" : "text-gray-700 hover:bg-orange-50 hover:text-[#EF742C]"}`}>
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  setViewMonth(i);
+                  setMode("day");
+                }}
+                className={`py-2 rounded-lg text-xs font-medium transition-all duration-150 ${viewMonth === i ? "bg-[#EF742C] text-white" : "text-gray-700 hover:bg-orange-50 hover:text-[#EF742C]"}`}
+              >
                 {m}
               </button>
             ))}
@@ -390,8 +459,15 @@ const CustomDatePicker = ({
           <div className="max-h-48 overflow-y-auto p-2">
             <div className="grid grid-cols-3 gap-1">
               {yearRange.map((y) => (
-                <button key={y} type="button" onClick={() => { setViewYear(y); setMode("day"); }}
-                  className={`py-2 rounded-lg text-xs font-medium transition-all duration-150 ${viewYear === y ? "bg-[#EF742C] text-white" : "text-gray-700 hover:bg-orange-50 hover:text-[#EF742C]"}`}>
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => {
+                    setViewYear(y);
+                    setMode("day");
+                  }}
+                  className={`py-2 rounded-lg text-xs font-medium transition-all duration-150 ${viewYear === y ? "bg-[#EF742C] text-white" : "text-gray-700 hover:bg-orange-50 hover:text-[#EF742C]"}`}
+                >
                   {y}
                 </button>
               ))}
@@ -403,7 +479,12 @@ const CustomDatePicker = ({
           <div className="p-3">
             <div className="grid grid-cols-7 mb-1">
               {DAYS.map((d) => (
-                <div key={d} className="w-8 h-6 flex items-center justify-center text-xs font-semibold text-[#EF742C]">{d}</div>
+                <div
+                  key={d}
+                  className="w-8 h-6 flex items-center justify-center text-xs font-semibold text-[#EF742C]"
+                >
+                  {d}
+                </div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-y-1">{renderDayView()}</div>
@@ -416,7 +497,10 @@ const CustomDatePicker = ({
               type="button"
               onClick={() => {
                 const today = new Date().toISOString().split("T")[0];
-                if ((!maxDate || today <= maxDate) && (!minDate || today >= minDate)) {
+                if (
+                  (!maxDate || today <= maxDate) &&
+                  (!minDate || today >= minDate)
+                ) {
                   onChange(today);
                   if (onBlur) onBlur();
                   setOpen(false);
@@ -455,7 +539,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const [createdBy] = useState(ADMIN_NAMES[0]);
 
   const [transactionIds, setTransactionIds] = useState([""]);
-  const [selectedBanks, setSelectedBanks] = useState([{ bank: "", branch: "" }]);
+  const [selectedBanks, setSelectedBanks] = useState([
+    { bank: "", branch: "" },
+  ]);
 
   // Single "Enter Amount" the admin types — waterfalls into DP + installments
   const [enteredAmount, setEnteredAmount] = useState("");
@@ -472,7 +558,14 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     OPTIONAL_FEE_ITEMS.map((name) => ({ name, checked: false, amount: 0 })),
   );
 
-  const paymentModes = ["Cheque", "Cash", "Online Transfer", "DD", "UPI", "NEFT/RTGS"];
+  const paymentModes = [
+    "Cheque",
+    "Cash",
+    "Online Transfer",
+    "DD",
+    "UPI",
+    "NEFT/RTGS",
+  ];
   const banks = ["HDFC Bank", "Apex Bank"];
 
   // Fixed branch per bank — auto-filled and locked when a bank is selected.
@@ -488,9 +581,15 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     ...banks.map((b) => ({ label: b, value: b })),
   ];
   // Project dropdown — real projects only, used to build/look up the membership id
-  const projectOptions = PROJECTS.map((p) => ({ label: p.name, value: p.name }));
+  const projectOptions = PROJECTS.map((p) => ({
+    label: p.name,
+    value: p.name,
+  }));
   // Payment Type dropdown — Site Payment vs Fixed/Recurring Deposit
-  const paymentCategoryOptions = PAYMENT_CATEGORIES.map((c) => ({ label: c, value: c }));
+  const paymentCategoryOptions = PAYMENT_CATEGORIES.map((c) => ({
+    label: c,
+    value: c,
+  }));
 
   // Transaction ID Handler (single)
   const updateTransactionId = (index, value) => {
@@ -550,7 +649,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       if (isDeposit) {
         if (!memberFound) {
           setMemberExists(false);
-          setMemberValidationMessage("❌ Member not found. Please add member first in Members.");
+          setMemberValidationMessage(
+            "❌ Member not found. Please add member first in Members.",
+          );
           setBookingBreakdown(null);
           setPaidAmountsState({});
           setMemberAddresses([]);
@@ -562,34 +663,52 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
         setBookingBreakdown(null);
         setPaidAmountsState({});
 
-        if (memberFound.name) formik.setFieldValue("receivedFrom", memberFound.name);
+        if (memberFound.name)
+          formik.setFieldValue("receivedFrom", memberFound.name);
         if (memberFound.email) formik.setFieldValue("Email", memberFound.email);
         const depositMobile =
-          memberFound.mobile ?? memberFound.mobilenumber ?? memberFound.mobile_number ?? "";
-        if (depositMobile) formik.setFieldValue("phoneNumber", String(depositMobile));
+          memberFound.mobile ??
+          memberFound.mobilenumber ??
+          memberFound.mobile_number ??
+          "";
+        if (depositMobile)
+          formik.setFieldValue("phoneNumber", String(depositMobile));
 
         const depositAddresses = [];
         if (memberFound.permanentaddress)
-          depositAddresses.push({ label: "Permanent Address", value: memberFound.permanentaddress });
+          depositAddresses.push({
+            label: "Permanent Address",
+            value: memberFound.permanentaddress,
+          });
         if (memberFound.correspondenceaddress)
-          depositAddresses.push({ label: "Correspondence Address", value: memberFound.correspondenceaddress });
+          depositAddresses.push({
+            label: "Correspondence Address",
+            value: memberFound.correspondenceaddress,
+          });
         setMemberAddresses(depositAddresses);
-        if (depositAddresses.length > 0) formik.setFieldValue("flatNumber", depositAddresses[0].value);
+        if (depositAddresses.length > 0)
+          formik.setFieldValue("flatNumber", depositAddresses[0].value);
 
-        setMemberValidationMessage("✅ Member found. Proceeding with deposit receipt.");
+        setMemberValidationMessage(
+          "✅ Member found. Proceeding with deposit receipt.",
+        );
         setIsCheckingMember(false);
         return;
       }
 
       const sitebookingsResponse = await axios.get(`${API_BASE}/sitebookings`);
       const sitebookings = sitebookingsResponse.data || [];
-      const siteBookingFound = sitebookings.find((s) => s.membership_id === membershipId);
+      const siteBookingFound = sitebookings.find(
+        (s) => s.membership_id === membershipId,
+      );
 
       const exists = !!(memberFound && siteBookingFound);
       setMemberExists(exists);
 
       if (memberFound && !siteBookingFound) {
-        setMemberValidationMessage("⚠️ Member found but no Site Booking exists. Please create a Site Booking first.");
+        setMemberValidationMessage(
+          "⚠️ Member found but no Site Booking exists. Please create a Site Booking first.",
+        );
         setIsCheckingMember(false);
         return;
       }
@@ -597,8 +716,10 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       if (exists) {
         const foundMember = memberFound || siteBookingFound;
         // Auto-fill name, phone, email, site dimension, address (permanent)
-        if (foundMember?.name) formik.setFieldValue("receivedFrom", foundMember.name);
-        if (foundMember?.email) formik.setFieldValue("Email", foundMember.email);
+        if (foundMember?.name)
+          formik.setFieldValue("receivedFrom", foundMember.name);
+        if (foundMember?.email)
+          formik.setFieldValue("Email", foundMember.email);
         const mobile =
           memberFound?.mobile ??
           memberFound?.mobilenumber ??
@@ -606,10 +727,12 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
           siteBookingFound?.mobilenumber ??
           "";
         if (mobile) formik.setFieldValue("phoneNumber", String(mobile));
-        if (siteBookingFound?.sitedimension) formik.setFieldValue("siteDimension", siteBookingFound.sitedimension);
+        if (siteBookingFound?.sitedimension)
+          formik.setFieldValue("siteDimension", siteBookingFound.sitedimension);
 
         // ── Detect the booking's payment plan ──
-        const plan = siteBookingFound.paymentplan === "full" ? "full" : "installments";
+        const plan =
+          siteBookingFound.paymentplan === "full" ? "full" : "installments";
         setPaymentPlan(plan);
 
         // ── Build the payment breakdown ──
@@ -656,38 +779,54 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
 
         const addresses = [];
         if (memberFound?.permanentaddress)
-          addresses.push({ label: "Permanent Address", value: memberFound.permanentaddress });
+          addresses.push({
+            label: "Permanent Address",
+            value: memberFound.permanentaddress,
+          });
         if (memberFound?.correspondenceaddress)
-          addresses.push({ label: "Correspondence Address", value: memberFound.correspondenceaddress });
+          addresses.push({
+            label: "Correspondence Address",
+            value: memberFound.correspondenceaddress,
+          });
         setMemberAddresses(addresses);
         // Prefer permanent address
-        if (addresses.length > 0) formik.setFieldValue("flatNumber", addresses[0].value);
+        if (addresses.length > 0)
+          formik.setFieldValue("flatNumber", addresses[0].value);
 
         const receiptsResponse = await axios.get(`${API_BASE}/receipts`);
         const receipts = receiptsResponse.data.data || [];
+        // Read every spelling of the id — see receiptMembershipId() above.
+        // This filter previously used only `r.membership_id` and matched
+        // nothing, so no previous payment was ever counted.
         const memberReceipts = receipts.filter(
-          (r) => r.membership_id === membershipId && !r.cancelled,
+          (r) => receiptMembershipId(r) === membershipId && !r.cancelled,
         );
-        const existingReceipt = memberReceipts.length > 0 ? memberReceipts[0] : null;
+        const existingReceipt =
+          memberReceipts.length > 0 ? memberReceipts[0] : null;
         setHasExistingReceipt(!!existingReceipt);
 
         // ── Sum already-paid per bucket from previous receipts ──
         // Preferred: each receipt's `allocations` array (exact per-bucket split).
         // Legacy fallback: parse the paymenttype string + split amountpaid evenly.
-        const bucketNames = plan === "full" ? [FULL_PAYMENT_BUCKET] : INSTALLMENT_PAYMENT_NAMES;
+        const bucketNames =
+          plan === "full" ? [FULL_PAYMENT_BUCKET] : INSTALLMENT_PAYMENT_NAMES;
         const paidAmountsMap = {};
-        bucketNames.forEach((n) => { paidAmountsMap[n] = 0; });
+        bucketNames.forEach((n) => {
+          paidAmountsMap[n] = 0;
+        });
 
         const bucketForLabel = (label) => {
           if (!label) return null;
           const t = label.trim();
           if (plan === "full") {
             // In full mode everything collapses onto the single Full Payment bucket
-            if (t === FULL_PAYMENT_BUCKET || t.startsWith("Booking Advance")) return FULL_PAYMENT_BUCKET;
+            if (t === FULL_PAYMENT_BUCKET || t.startsWith("Booking Advance"))
+              return FULL_PAYMENT_BUCKET;
             return null;
           }
           // "Booking Advance" / "Booking Advance N" was a partial down payment
-          if (t === "Down Payment" || t.startsWith("Booking Advance")) return "Down Payment";
+          if (t === "Down Payment" || t.startsWith("Booking Advance"))
+            return "Down Payment";
           if (INSTALLMENT_PAYMENT_NAMES.includes(t)) return t;
           return null;
         };
@@ -707,26 +846,36 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
               .filter((b) => b && paidAmountsMap[b] !== undefined);
             if (buckets.length === 0) return;
             const perBucket = (r.amountpaid || 0) / buckets.length;
-            buckets.forEach((b) => { paidAmountsMap[b] += perBucket; });
+            buckets.forEach((b) => {
+              paidAmountsMap[b] += perBucket;
+            });
           }
         });
 
         setPaidAmountsState({ ...paidAmountsMap });
 
         if (existingReceipt) {
-          setMemberValidationMessage("✅ Member found. Previous receipts found — schedule updated below.");
+          setMemberValidationMessage(
+            "✅ Member found. Previous receipts found — schedule updated below.",
+          );
         } else {
-          setMemberValidationMessage("✅ Member found. No previous receipts — this is the first payment.");
+          setMemberValidationMessage(
+            "✅ Member found. No previous receipts — this is the first payment.",
+          );
         }
       } else {
-        setMemberValidationMessage("❌ Member not found. Please add member first in Members or Site Booking.");
+        setMemberValidationMessage(
+          "❌ Member not found. Please add member first in Members or Site Booking.",
+        );
         setBookingBreakdown(null);
         setPaidAmountsState({});
         setMemberAddresses([]);
       }
     } catch (error) {
       console.error("Error checking member:", error);
-      setMemberValidationMessage("⚠️ Error checking member details. Please check your connection.");
+      setMemberValidationMessage(
+        "⚠️ Error checking member details. Please check your connection.",
+      );
       setMemberExists(false);
     } finally {
       setIsCheckingMember(false);
@@ -734,17 +883,28 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   };
 
   const validationSchema = Yup.object().shape({
-    receiptNo: Yup.string().required("Receipt number is required").matches(/^[0-9]+$/, "Only numbers allowed"),
-    receiptDate: Yup.date().required("Date is required").typeError("Please select a valid date"),
+    receiptNo: Yup.string()
+      .required("Receipt number is required")
+      .matches(/^[0-9]+$/, "Only numbers allowed"),
+    receiptDate: Yup.date()
+      .required("Date is required")
+      .typeError("Please select a valid date"),
     receivedFrom: Yup.string()
       .required("Received from name is required")
       .min(2, "Minimum 2 characters required")
       .matches(/^[a-zA-Z\s.]+$/, "Only letters, spaces, and periods allowed"),
     phoneNumber: Yup.string()
-      .matches(/^(\+?[1-9]\d{0,3}|0)?[6-9]\d{9}$/, "Enter a valid contact number")
+      .matches(
+        /^(\+?[1-9]\d{0,3}|0)?[6-9]\d{9}$/,
+        "Enter a valid contact number",
+      )
       .required("Phone number is required"),
-    Email: Yup.string().required("Email is required").email("Enter valid email"),
-    flatNumber: Yup.string().required("Address is required").min(10, "Please provide complete address (minimum 10 characters)"),
+    Email: Yup.string()
+      .required("Email is required")
+      .email("Enter valid email"),
+    flatNumber: Yup.string()
+      .required("Address is required")
+      .min(10, "Please provide complete address (minimum 10 characters)"),
     projectType: Yup.string().required("Project is required"),
     paymentCategory: Yup.string().required("Payment type is required"),
     year: Yup.string().required("Year is required"),
@@ -761,12 +921,14 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     paymentMode: Yup.string().required("Payment mode is required"),
     bankName: Yup.string().when("paymentMode", {
       is: (val) => val !== "Cash",
-      then: (schema) => schema.required("Bank name required for non-cash payments"),
+      then: (schema) =>
+        schema.required("Bank name required for non-cash payments"),
       otherwise: (schema) => schema.notRequired(),
     }),
     branch: Yup.string().when("paymentMode", {
       is: (val) => val !== "Cash",
-      then: (schema) => schema.required("Branch name required for non-cash payments"),
+      then: (schema) =>
+        schema.required("Branch name required for non-cash payments"),
       otherwise: (schema) => schema.notRequired(),
     }),
     chequeNo: Yup.string().when("paymentMode", {
@@ -869,7 +1031,10 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   const activeFees = optionalFees.filter(
     (f) => f.checked && parseFloat(f.amount || 0) > 0,
   );
-  const feesTotal = activeFees.reduce((s, f) => s + (parseFloat(f.amount) || 0), 0);
+  const feesTotal = activeFees.reduce(
+    (s, f) => s + (parseFloat(f.amount) || 0),
+    0,
+  );
 
   // Grand total on this receipt = amount allocated + optional fees.
   // For deposits there's no waterfall — the entered amount IS the deposit.
@@ -880,12 +1045,16 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
 
   const validatePaymentItems = () => {
     if (enteredNum <= 0 && feesTotal <= 0) {
-      setPaymentItemsError("Enter an amount (or select at least one fee) greater than zero");
+      setPaymentItemsError(
+        "Enter an amount (or select at least one fee) greater than zero",
+      );
       return false;
     }
     if (!isDeposit) {
       if (enteredNum > 0 && allocatedTotal === 0) {
-        setPaymentItemsError("All installments are already fully paid — nothing left to allocate");
+        setPaymentItemsError(
+          "All installments are already fully paid — nothing left to allocate",
+        );
         return false;
       }
       if (previewLeftover > 0) {
@@ -899,17 +1068,76 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     return true;
   };
 
+  // ── Clear the per-receipt fields after a confirmed save ──
+  //
+  // Nothing used to reset. Generating a second receipt in the same session
+  // re-sent the SAME receiptNo, which collides with the unique index and
+  // fails with E11000 — indistinguishable, from the admin's seat, from "the
+  // form randomly stopped saving". The member lookup is deliberately left
+  // intact so consecutive receipts for one member don't need re-entry.
+  const resetAfterSave = () => {
+    formik.setFieldValue("receiptNo", "");
+    formik.setFieldTouched("receiptNo", false);
+    setEnteredAmount("");
+    setTransactionIds([""]);
+    formik.setFieldValue("chequeNo", "");
+    setOptionalFees(
+      OPTIONAL_FEE_ITEMS.map((name) => ({ name, checked: false, amount: 0 })),
+    );
+    setPaymentItemsError("");
+  };
+
   const numberToWords = (num) => {
-    const ones = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine"];
-    const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
-    const teens = ["Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+    const ones = [
+      "",
+      "One",
+      "Two",
+      "Three",
+      "Four",
+      "Five",
+      "Six",
+      "Seven",
+      "Eight",
+      "Nine",
+    ];
+    const tens = [
+      "",
+      "",
+      "Twenty",
+      "Thirty",
+      "Forty",
+      "Fifty",
+      "Sixty",
+      "Seventy",
+      "Eighty",
+      "Ninety",
+    ];
+    const teens = [
+      "Ten",
+      "Eleven",
+      "Twelve",
+      "Thirteen",
+      "Fourteen",
+      "Fifteen",
+      "Sixteen",
+      "Seventeen",
+      "Eighteen",
+      "Nineteen",
+    ];
     if (num === 0) return "Zero";
     const convertLessThanThousand = (n) => {
       if (n === 0) return "";
       if (n < 10) return ones[n];
       if (n < 20) return teens[n - 10];
-      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "");
-      return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " " + convertLessThanThousand(n % 100) : "");
+      if (n < 100)
+        return (
+          tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "")
+        );
+      return (
+        ones[Math.floor(n / 100)] +
+        " Hundred" +
+        (n % 100 !== 0 ? " " + convertLessThanThousand(n % 100) : "")
+      );
     };
     if (num < 1000) return convertLessThanThousand(num);
     const crore = Math.floor(num / 10000000);
@@ -919,7 +1147,8 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     let result = "";
     if (crore > 0) result += convertLessThanThousand(crore) + " Crore ";
     if (lakh > 0) result += convertLessThanThousand(lakh) + " Lakh ";
-    if (thousand > 0) result += convertLessThanThousand(thousand) + " Thousand ";
+    if (thousand > 0)
+      result += convertLessThanThousand(thousand) + " Thousand ";
     if (remainder > 0) result += convertLessThanThousand(remainder);
     return result.trim();
   };
@@ -942,9 +1171,19 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     }
     const errors = await formik.validateForm();
     formik.setTouched({
-      receiptNo: true, receiptDate: true, receivedFrom: true, phoneNumber: true,
-      Email: true, flatNumber: true, seniorityNumber: true, bankName: true, branch: true, chequeNo: true,
-      projectType: true, paymentCategory: true, year: true,
+      receiptNo: true,
+      receiptDate: true,
+      receivedFrom: true,
+      phoneNumber: true,
+      Email: true,
+      flatNumber: true,
+      seniorityNumber: true,
+      bankName: true,
+      branch: true,
+      chequeNo: true,
+      projectType: true,
+      paymentCategory: true,
+      year: true,
     });
     if (Object.keys(errors).length === 0 && validatePaymentItems()) {
       try {
@@ -952,31 +1191,68 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
         const html2canvas = (await import("html2canvas")).default;
         const { default: jsPDF } = await import("jspdf");
         const container = document.createElement("div");
-        container.style.cssText = "position:fixed;left:-9999px;top:0;width:786px;background:#fff;padding:4px;margin:4px;box-sizing:border-box;";
+        container.style.cssText =
+          "position:fixed;left:-9999px;top:0;width:786px;background:#fff;padding:4px;margin:4px;box-sizing:border-box;";
         const { createRoot } = await import("react-dom/client");
         const root = createRoot(container);
         document.body.appendChild(container);
         await new Promise((resolve) => {
-          root.render(isDeposit ? <DepositReceiptContent /> : <ReceiptContent />);
+          root.render(
+            isDeposit ? <DepositReceiptContent /> : <ReceiptContent />,
+          );
           setTimeout(resolve, 800);
         });
+        // scale 3 ≈ 288 DPI at A4 — already past print quality. The previous
+        // value of 6 produced a 4764×6678 canvas (~576 DPI, 32 megapixels) for
+        // no visible gain, and the resulting base64 blew past Express's default
+        // 100 kb JSON body limit, so the POST died with 413 before the route
+        // ever ran. The PDF still downloaded, which is why this looked like a
+        // display bug rather than a save failure.
         const canvas = await html2canvas(container, {
-          scale: 6, useCORS: true, allowTaint: true, logging: false, backgroundColor: "#ffffff", width: 794, x: -4, y: -4,
+          scale: 3,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+          width: 794,
+          x: -4,
+          y: -4,
         });
         root.unmount();
         document.body.removeChild(container);
         const imgData = canvas.toDataURL("image/jpeg", 0.85);
-        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-        pdf.addImage(imgData, "PNG", 1, 1, 208, 295);
-        const projectPart = (formik.values.projectType || "").replace(/[^a-zA-Z0-9]/g, "_");
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+        // Format must match the data URI above. This said "PNG" while handing
+        // jsPDF JPEG bytes — tolerated by some versions, thrown by others.
+        pdf.addImage(imgData, "JPEG", 1, 1, 208, 295);
+        const projectPart = (formik.values.projectType || "").replace(
+          /[^a-zA-Z0-9]/g,
+          "_",
+        );
         const categoryPart = isDeposit
-          ? (formik.values.paymentCategory === "Fixed Deposit" ? "FD" : "RD")
+          ? formik.values.paymentCategory === "Fixed Deposit"
+            ? "FD"
+            : "RD"
           : "";
-        const seniorityPart = (formik.values.seniorityNumber || "").replace(/[^a-zA-Z0-9]/g, "_");
+        const seniorityPart = (formik.values.seniorityNumber || "").replace(
+          /[^a-zA-Z0-9]/g,
+          "_",
+        );
         const filename = isDeposit
           ? `${categoryPart}_${projectPart}_${seniorityPart}.pdf`
           : `${projectPart}_${seniorityPart}.pdf`;
         const pdfBase64 = pdf.output("datauristring").split(",")[1];
+        // Keep an eye on this: if it creeps back over the server's body limit
+        // the POST fails with 413 and the row silently never appears.
+        console.log(
+          "PDF payload ≈",
+          Math.round((pdfBase64.length * 3) / 4 / 1024),
+          "KB",
+        );
 
         // This receipt's rows: waterfall allocations + any optional fees
         // (for deposits: a single row for the deposit amount + any fees)
@@ -985,9 +1261,16 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
           label: f.name,
           amount: Math.round(parseFloat(f.amount) || 0),
         }));
-        const depositAllocation = isDeposit && enteredNum > 0
-          ? [{ bucket: formik.values.paymentCategory, label: formik.values.paymentCategory, amount: enteredNum }]
-          : [];
+        const depositAllocation =
+          isDeposit && enteredNum > 0
+            ? [
+                {
+                  bucket: formik.values.paymentCategory,
+                  label: formik.values.paymentCategory,
+                  amount: enteredNum,
+                },
+              ]
+            : [];
         const allAllocations = isDeposit
           ? [...depositAllocation, ...feeAllocations]
           : [...previewAllocations, ...feeAllocations];
@@ -1003,7 +1286,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             projectname: isDeposit ? "NA" : formik.values.projectType,
             deposittype: isDeposit ? formik.values.paymentCategory : undefined,
             paymentcategory: isDeposit
-              ? (formik.values.paymentCategory === "Fixed Deposit" ? "fixed_deposit" : "recurring_deposit")
+              ? formik.values.paymentCategory === "Fixed Deposit"
+                ? "fixed_deposit"
+                : "recurring_deposit"
               : "site",
             date: formik.values.receiptDate,
             amountpaid: total,
@@ -1013,21 +1298,52 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             paymenttype: paymentTypeStr,
             allocations: allAllocations,
             transactionid: transactionIds.filter(Boolean).join(", "),
-            dimension: isDeposit ? "" : (formik.values.siteDimension || "N/A"),
-            bank: selectedBanks.map((b) => b.bank).filter(Boolean).join(", "),
+            dimension: isDeposit ? "" : formik.values.siteDimension || "N/A",
+            bank: selectedBanks
+              .map((b) => b.bank)
+              .filter(Boolean)
+              .join(", "),
             created_by: createdBy,
             pdfBase64,
             pdfFilename: filename,
           };
-          const response = await axios.post(`${API_BASE}/receipt`, receiptPayload);
-          if (response.data.success) {
+          const response = await axios.post(
+            `${API_BASE}/receipt`,
+            receiptPayload,
+          );
+          if (response?.data?.success) {
             pdf.save(filename);
-            toast.success("✅ Receipt generated, downloaded and emailed successfully!");
+            toast.success(
+              "✅ Receipt generated, downloaded and emailed successfully!",
+            );
+            resetAfterSave();
+            if (typeof onReceiptGenerate === "function") {
+              onReceiptGenerate(response.data);
+            }
+          } else {
+            // A 200 carrying success:false used to fall through with no save,
+            // no toast and no error — the admin had no way to know the row
+            // never persisted.
+            console.error("⚠️ Backend rejected the receipt:", response?.data);
+            toast.error(
+              `❌ NOT saved: ${response?.data?.message || "backend returned success:false"}`,
+            );
           }
         } catch (backendError) {
-          console.error("⚠️ Backend error:", backendError);
+          const status = backendError?.response?.status;
+          const msg =
+            backendError?.response?.data?.message ||
+            backendError?.response?.data?.error ||
+            backendError.message;
+          console.error(
+            "⚠️ Backend error:",
+            status,
+            backendError?.response?.data,
+          );
           pdf.save(filename);
-          toast.warning("Receipt downloaded locally but cloud storage/email failed.");
+          // "downloaded locally but cloud storage failed" undersold this: the
+          // receipt does not exist in the database, so say so plainly.
+          toast.error(`❌ Receipt NOT saved (${status || "network"}): ${msg}`);
         }
         setIsGeneratingPDF(false);
       } catch (error) {
@@ -1036,6 +1352,19 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
         setIsGeneratingPDF(false);
       }
     } else {
+      // This branch used to be completely silent. With paymentMode defaulting
+      // to "Cheque", bank/branch/transaction id are all required — miss one and
+      // the button appeared dead, the only clue being red text on a field that
+      // may well be scrolled out of view.
+      const firstError = Object.values(errors)[0];
+      if (Object.keys(errors).length > 0) {
+        console.warn("Validation blocked submit:", errors);
+        toast.error(
+          firstError || "Fix the highlighted fields before generating.",
+        );
+      } else if (paymentItemsError) {
+        toast.error(paymentItemsError);
+      }
       setIsGeneratingPDF(false);
     }
   };
@@ -1046,38 +1375,125 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
   // (deposits: a single row for the deposit type + any fees)
   const receiptRows = isDeposit
     ? [
-        ...(enteredNum > 0 ? [{ name: formik.values.paymentCategory, amount: enteredNum }] : []),
-        ...activeFees.map((f) => ({ name: f.name, amount: Math.round(parseFloat(f.amount) || 0) })),
+        ...(enteredNum > 0
+          ? [{ name: formik.values.paymentCategory, amount: enteredNum }]
+          : []),
+        ...activeFees.map((f) => ({
+          name: f.name,
+          amount: Math.round(parseFloat(f.amount) || 0),
+        })),
       ]
     : [
         ...previewAllocations.map((a) => ({ name: a.label, amount: a.amount })),
-        ...activeFees.map((f) => ({ name: f.name, amount: Math.round(parseFloat(f.amount) || 0) })),
+        ...activeFees.map((f) => ({
+          name: f.name,
+          amount: Math.round(parseFloat(f.amount) || 0),
+        })),
       ];
 
   // ── Existing site-project receipt layout (table-heavy, government-style) ──
   const ReceiptContent = () => (
-    <div style={{ border: "2px solid #000000", backgroundColor: "#ffffff", padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "center", height: "150px", borderBottom: "2px solid #000000", paddingBottom: "15px", marginTop: "0px", marginBottom: "16px", marginLeft: "-20px", marginRight: "-20px", paddingLeft: "10px", gap: "10px" }}>
+    <div
+      style={{
+        border: "2px solid #000000",
+        backgroundColor: "#ffffff",
+        padding: "20px",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          height: "150px",
+          borderBottom: "2px solid #000000",
+          paddingBottom: "15px",
+          marginTop: "0px",
+          marginBottom: "16px",
+          marginLeft: "-20px",
+          marginRight: "-20px",
+          paddingLeft: "10px",
+          gap: "10px",
+        }}
+      >
         <div style={{ flexShrink: 0 }}>
-          <img src={"/images/bg-removed-logo.webp"} alt="Logo" style={{ width: "160px", height: "140px", marginBottom: "15px", objectFit: "contain" }} />
+          <img
+            src={"/images/bg-removed-logo.webp"}
+            alt="Logo"
+            style={{
+              width: "160px",
+              height: "140px",
+              marginBottom: "15px",
+              objectFit: "contain",
+            }}
+          />
         </div>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>{formik.values.societyNameKannada}</div>
-          <div style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "4px" }}>{formik.values.societyName}</div>
-          <div style={{ fontSize: "11px", marginBottom: "2px" }}>{formik.values.societyAddress}</div>
-          <div style={{ fontSize: "11px", marginBottom: "2px" }}>{formik.values.regNo}</div>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: "bold",
+              marginBottom: "4px",
+            }}
+          >
+            {formik.values.societyNameKannada}
+          </div>
+          <div
+            style={{
+              fontSize: "15px",
+              fontWeight: "bold",
+              marginBottom: "4px",
+            }}
+          >
+            {formik.values.societyName}
+          </div>
+          <div style={{ fontSize: "11px", marginBottom: "2px" }}>
+            {formik.values.societyAddress}
+          </div>
+          <div style={{ fontSize: "11px", marginBottom: "2px" }}>
+            {formik.values.regNo}
+          </div>
           <div style={{ fontSize: "11px" }}>
-            <a href={`https://${formik.values.website}`} target="_blank" rel="noopener noreferrer" style={{ color: "#000000", textDecoration: "none" }}>{formik.values.website}</a>
+            <a
+              href={`https://${formik.values.website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#000000", textDecoration: "none" }}
+            >
+              {formik.values.website}
+            </a>
             {" / "}
-            <a href={`mailto:${formik.values.email}`} style={{ color: "#000000", textDecoration: "none" }}>{formik.values.email}</a>
+            <a
+              href={`mailto:${formik.values.email}`}
+              style={{ color: "#000000", textDecoration: "none" }}
+            >
+              {formik.values.email}
+            </a>
           </div>
         </div>
         <div style={{ width: "80px", flexShrink: 0 }}></div>
       </div>
       <div style={{ textAlign: "center", paddingBottom: "6px" }}>
-        <span style={{ border: "2px solid #000000", fontWeight: "bold", fontSize: "14px", padding: "5px 10px 18px" }}>RECEIPT</span>
+        <span
+          style={{
+            border: "2px solid #000000",
+            fontWeight: "bold",
+            fontSize: "14px",
+            padding: "5px 10px 18px",
+          }}
+        >
+          RECEIPT
+        </span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px", fontSize: "13px", fontWeight: "bold" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+          fontSize: "13px",
+          fontWeight: "bold",
+        }}
+      >
         <div>RECEIPT No. {formik.values.receiptNo}</div>
         <div>Date: {formatDate(formik.values.receiptDate)}</div>
       </div>
@@ -1086,75 +1502,268 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
           { label: `Received From Smt./Shree: ${formik.values.receivedFrom}` },
           { label: `Address: ${formik.values.flatNumber}` },
           { label: `Rupees: ${amountInWords} Only.` },
-          { label: `Membership Id: ${formik.values.projectType} (${formik.values.seniorityNumber})` },
+          {
+            label: `Membership Id: ${formik.values.projectType} (${formik.values.seniorityNumber})`,
+          },
         ].map((row, i, arr) => (
-          <div key={i} style={{ marginBottom: i < arr.length - 1 ? "6px" : 0, paddingBottom: "6px", borderBottom: "1.5px solid #000" }}>
+          <div
+            key={i}
+            style={{
+              marginBottom: i < arr.length - 1 ? "6px" : 0,
+              paddingBottom: "6px",
+              borderBottom: "1.5px solid #000",
+            }}
+          >
             <strong>{row.label}</strong>
           </div>
         ))}
       </div>
       <div style={{ marginBottom: "16px" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #000000", fontSize: "12px" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            border: "1px solid #000000",
+            fontSize: "12px",
+          }}
+        >
           <thead>
             <tr>
-              {["S.No","Dimension","Payment Type","Payment Mode","Cheque/Transaction ID","Amount"].map((h, i) => (
-                <th key={i} style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontWeight: "bold", fontSize: "12px", backgroundColor: "#f0f0f0" }}>{h}</th>
+              {[
+                "S.No",
+                "Dimension",
+                "Payment Type",
+                "Payment Mode",
+                "Cheque/Transaction ID",
+                "Amount",
+              ].map((h, i) => (
+                <th
+                  key={i}
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                    backgroundColor: "#f0f0f0",
+                  }}
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {receiptRows.map((item, index) => (
               <tr key={index}>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontSize: "11px" }}>{index + 1}</td>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontSize: "11px" }}>{formik.values.siteDimension}</td>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontSize: "11px" }}>{item.name}</td>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontSize: "11px" }}>{formik.values.paymentMode}</td>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "center", fontSize: "11px" }}>{formik.values.paymentMode === "Cash" ? "" : transactionIds[index] || transactionIds[0] || ""}</td>
-                <td style={{ border: "1px solid #000000", padding: "6px", textAlign: "right", fontSize: "11px" }}>{item.amount}</td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontSize: "11px",
+                  }}
+                >
+                  {index + 1}
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontSize: "11px",
+                  }}
+                >
+                  {formik.values.siteDimension}
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontSize: "11px",
+                  }}
+                >
+                  {item.name}
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontSize: "11px",
+                  }}
+                >
+                  {formik.values.paymentMode}
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "center",
+                    fontSize: "11px",
+                  }}
+                >
+                  {formik.values.paymentMode === "Cash"
+                    ? ""
+                    : transactionIds[index] || transactionIds[0] || ""}
+                </td>
+                <td
+                  style={{
+                    border: "1px solid #000000",
+                    padding: "6px",
+                    textAlign: "right",
+                    fontSize: "11px",
+                  }}
+                >
+                  {item.amount}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div style={{ marginBottom: "16px" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #000000", fontSize: "12px" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            border: "1px solid #000000",
+            fontSize: "12px",
+          }}
+        >
           <thead>
             <tr>
-              <th colSpan="2" style={{ border: "1px solid #000000", padding: "8px", textAlign: "center", fontWeight: "bold", width: "70%", backgroundColor: "#f0f0f0" }}>Particulars</th>
-              <th style={{ border: "1px solid #000000", padding: "8px", textAlign: "center", fontWeight: "bold", width: "5%", backgroundColor: "#f0f0f0" }}>L.F</th>
-              <th style={{ border: "1px solid #000000", padding: "8px", textAlign: "center", fontWeight: "bold", width: "20%", backgroundColor: "#f0f0f0" }}>Rs.</th>
-              <th style={{ border: "1px solid #000000", padding: "8px", textAlign: "center", fontWeight: "bold", width: "5%", backgroundColor: "#f0f0f0" }}>P</th>
+              <th
+                colSpan="2"
+                style={{
+                  border: "1px solid #000000",
+                  padding: "8px",
+                  textAlign: "center",
+                  fontWeight: "bold",
+                  width: "70%",
+                  backgroundColor: "#f0f0f0",
+                }}
+              >
+                Particulars
+              </th>
+              <th
+                style={{
+                  border: "1px solid #000000",
+                  padding: "8px",
+                  textAlign: "center",
+                  fontWeight: "bold",
+                  width: "5%",
+                  backgroundColor: "#f0f0f0",
+                }}
+              >
+                L.F
+              </th>
+              <th
+                style={{
+                  border: "1px solid #000000",
+                  padding: "8px",
+                  textAlign: "center",
+                  fontWeight: "bold",
+                  width: "20%",
+                  backgroundColor: "#f0f0f0",
+                }}
+              >
+                Rs.
+              </th>
+              <th
+                style={{
+                  border: "1px solid #000000",
+                  padding: "8px",
+                  textAlign: "center",
+                  fontWeight: "bold",
+                  width: "5%",
+                  backgroundColor: "#f0f0f0",
+                }}
+              >
+                P
+              </th>
             </tr>
           </thead>
           <tbody>
             {receiptRows.map((item, index) => (
               <tr key={index}>
-                <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center", width: "5%" }}>{index + 1}.</td>
-                <td style={{ border: "1px solid #000", padding: "8px" }}>{item.name}</td>
+                <td
+                  style={{
+                    border: "1px solid #000",
+                    padding: "8px",
+                    textAlign: "center",
+                    width: "5%",
+                  }}
+                >
+                  {index + 1}.
+                </td>
+                <td style={{ border: "1px solid #000", padding: "8px" }}>
+                  {item.name}
+                </td>
                 <td style={{ border: "1px solid #000", padding: "8px" }}></td>
-                <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>{item.amount > 0 ? item.amount : "-"}</td>
+                <td
+                  style={{
+                    border: "1px solid #000",
+                    padding: "8px",
+                    textAlign: "center",
+                  }}
+                >
+                  {item.amount > 0 ? item.amount : "-"}
+                </td>
                 <td style={{ border: "1px solid #000", padding: "8px" }}></td>
               </tr>
             ))}
             <tr style={{ fontWeight: "bold" }}>
-              <td colSpan="2" style={{ border: "1px solid #000000", padding: "8px" }}><strong>Total</strong></td>
+              <td
+                colSpan="2"
+                style={{ border: "1px solid #000000", padding: "8px" }}
+              >
+                <strong>Total</strong>
+              </td>
               <td style={{ border: "1px solid #000000", padding: "8px" }}></td>
-              <td style={{ border: "1px solid #000000", padding: "8px", textAlign: "center" }}><strong>{total}</strong></td>
+              <td
+                style={{
+                  border: "1px solid #000000",
+                  padding: "8px",
+                  textAlign: "center",
+                }}
+              >
+                <strong>{total}</strong>
+              </td>
               <td style={{ border: "1px solid #000000", padding: "8px" }}></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: "11px", fontStyle: "italic", marginBottom: "32px" }}>
-        *If 30% of the booking amount is not paid within 20 days from the date of booking, 10% penalty apply.
+      <div
+        style={{ fontSize: "11px", fontStyle: "italic", marginBottom: "32px" }}
+      >
+        *If 30% of the booking amount is not paid within 20 days from the date
+        of booking, 10% penalty apply.
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", fontSize: "13px", marginTop: "40px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          fontSize: "13px",
+          marginTop: "40px",
+        }}
+      >
         <div>Party's Signature</div>
         <div style={{ textAlign: "center" }}>
           <img
             src={"/images/president-signature.webp"}
             alt="President/Secretary Signature"
-            style={{ height: "55px", objectFit: "contain", marginBottom: "4px", display: "block", marginLeft: "auto", marginRight: "auto" }}
+            style={{
+              height: "55px",
+              objectFit: "contain",
+              marginBottom: "4px",
+              display: "block",
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
           />
           <div>President/Secretary</div>
         </div>
@@ -1172,7 +1781,20 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     // Top-right timestamp = when this PDF was generated (matches the
     // "Date: 24-Nov-25 11:11:22" stamp style in the reference receipt).
     const formatDate = (d) => {
-      const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const monthsShort = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
       const day = String(d.getDate()).padStart(2, "0");
       const month = monthsShort[d.getMonth()];
       const year = String(d.getFullYear()).slice(-2);
@@ -1185,7 +1807,20 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     // captures a date (no time stamp appended, per the latest receipt copy).
     const formatPaymentDate = (dateString) => {
       const d = new Date(dateString);
-      const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const monthsShort = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
       const day = String(d.getDate()).padStart(2, "0");
       const month = monthsShort[d.getMonth()];
       return `${day}-${month}-${d.getFullYear()}`;
@@ -1203,11 +1838,15 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
     const feeNote =
       activeFees.length > 0
         ? ` (includes ${activeFees
-            .map((f) => `${f.name}: ₹${Math.round(parseFloat(f.amount) || 0).toLocaleString("en-IN")}`)
+            .map(
+              (f) =>
+                `${f.name}: ₹${Math.round(parseFloat(f.amount) || 0).toLocaleString("en-IN")}`,
+            )
             .join(", ")})`
         : "";
 
-    const hasTransactionRef = formik.values.paymentMode !== "Cash" && transactionIds[0];
+    const hasTransactionRef =
+      formik.values.paymentMode !== "Cash" && transactionIds[0];
 
     return (
       <div
@@ -1248,25 +1887,68 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
           />
         </div>
 
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1 }}>
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+          }}
+        >
           {/* Header: logo — society name/address/reg — QR code */}
-          <div style={{ display: "flex", alignItems: "center", gap: "18px", padding: "28px 26px 22px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "18px",
+              padding: "28px 26px 22px",
+            }}
+          >
             <img
               src={"/images/bg-removed-logo.webp"}
               alt="Logo"
-              style={{ width: "110px", height: "110px", objectFit: "contain", flexShrink: 0 }}
+              style={{
+                width: "110px",
+                height: "110px",
+                objectFit: "contain",
+                flexShrink: 0,
+              }}
             />
             <div style={{ flex: 1, textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "3px" }}>
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  marginBottom: "3px",
+                }}
+              >
                 {formik.values.societyName}
               </div>
               <div style={{ fontSize: "11px", marginBottom: "3px" }}>
                 (Governed by Karnataka Government Co-operative Societies Act)
               </div>
-              <div style={{ fontSize: "10px", marginBottom: "2px" }}>{formik.values.regNo}</div>
-              <div style={{ fontSize: "10px" }}>{formik.values.societyAddress}</div>
+              <div style={{ fontSize: "10px", marginBottom: "2px" }}>
+                {formik.values.regNo}
+              </div>
+              <div style={{ fontSize: "10px" }}>
+                {formik.values.societyAddress}
+              </div>
             </div>
-            <div style={{ width: "96px", flexShrink: 0, display: "flex", justifyContent: "center" }}>
+            <div
+              style={{
+                width: "96px",
+                flexShrink: 0,
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              {/* NOTE: this QR is fetched from a third-party host mid-save. If
+                  it is slow the code renders blank, and if the CORS header is
+                  missing the canvas is tainted and toDataURL throws
+                  SecurityError — surfacing as "Failed to generate receipt".
+                  Worth moving to a local `qrcode` data URI when you get a
+                  chance. */}
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=124x124&data=${encodeURIComponent(qrValue)}`}
                 alt="QR"
@@ -1280,39 +1962,72 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
 
           {/* Title + receipt meta stamped top-right */}
           <div style={{ position: "relative", padding: "20px 22px 0" }}>
-            <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "16px", letterSpacing: "0.5px" }}>
+            <div
+              style={{
+                textAlign: "center",
+                fontWeight: "bold",
+                fontSize: "16px",
+                letterSpacing: "0.5px",
+              }}
+            >
               PAYMENT RECEIPT
             </div>
-            <div style={{ position: "absolute", top: "50px", right: "22px", textAlign: "right", fontSize: "12px", color: "#2b2b2b", fontWeight: "600" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: "50px",
+                right: "22px",
+                textAlign: "right",
+                fontSize: "12px",
+                color: "#2b2b2b",
+                fontWeight: "600",
+              }}
+            >
               <div>Receipt No: {formik.values.receiptNo}</div>
               <div>Date: {formatDate(new Date())}</div>
             </div>
           </div>
 
           {/* Body paragraph — generous letter-style rhythm instead of a table */}
-          <div style={{ padding: "50px 46px 0", fontSize: "15.5px", lineHeight: "1.6" }}>
+          <div
+            style={{
+              padding: "50px 46px 0",
+              fontSize: "15.5px",
+              lineHeight: "1.6",
+            }}
+          >
             <div style={{ marginBottom: "16px" }}>
               Dear <strong>{formik.values.receivedFrom}</strong>,
             </div>
             <div style={{ marginBottom: "14px" }}>
-              This receipt acknowledges your payment of Rs. {total.toLocaleString("en-IN")} (
-              <strong>{amountInWords} Rupees</strong> only) to the society, towards{" "}
-              <strong>{formik.values.paymentCategory}</strong>.{feeNote}
+              This receipt acknowledges your payment of Rs.{" "}
+              {total.toLocaleString("en-IN")} (
+              <strong>{amountInWords} Rupees</strong> only) to the society,
+              towards <strong>{formik.values.paymentCategory}</strong>.{feeNote}
             </div>
             {/* <div style={{ marginBottom: "14px" }}>Project Name: NA</div> */}
             <div style={{ marginBottom: "14px" }}>
-              Your membership ID <strong>{formik.values.seniorityNumber}</strong> has been credited accordingly.
+              Your membership ID{" "}
+              <strong>{formik.values.seniorityNumber}</strong> has been credited
+              accordingly.
             </div>
             <div style={{ marginBottom: "14px" }}>
-              The payment was processed via <strong>{formik.values.paymentMode}</strong>
+              The payment was processed via{" "}
+              <strong>{formik.values.paymentMode}</strong>
               {hasTransactionRef ? (
-                <> and the transaction reference number is <strong>{transactionIds[0]}</strong>.</>
+                <>
+                  {" "}
+                  and the transaction reference number is{" "}
+                  <strong>{transactionIds[0]}</strong>.
+                </>
               ) : (
                 "."
               )}{" "}
               on {formatPaymentDate(formik.values.receiptDate)}
             </div>
-            <div style={{ marginBottom: "32px" }}>Thank you for your continued support and contributions.</div>
+            <div style={{ marginBottom: "32px" }}>
+              Thank you for your continued support and contributions.
+            </div>
             <div>Sincerely,</div>
             <div style={{ marginTop: "32px" }}>Sd/-</div>
             <div>Secretary</div>
@@ -1345,14 +2060,15 @@ body { background: white !important; }
 .receipt-panel { font-family: Arial, sans-serif; }
 `}</style>
 
-      <Header/>
+      <Header />
       <div className="max-w-4xl px-[50px] p-6">
-        <h2 className="text-[24px] font-semibold text-gray-800 mb-4 mt-2">Receipt Form</h2>
+        <h2 className="text-[24px] font-semibold text-gray-800 mb-4 mt-2">
+          Receipt Form
+        </h2>
         <form onSubmit={formik.handleSubmit}>
           <div className="no-print bg-[#EF742C]/10 rounded-lg shadow-sm p-5">
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-
                 {/* Receipt Number */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1371,7 +2087,9 @@ body { background: white !important; }
                     }`}
                   />
                   {formik.touched.receiptNo && formik.errors.receiptNo && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.receiptNo}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.receiptNo}
+                    </p>
                   )}
                 </div>
 
@@ -1394,10 +2112,15 @@ body { background: white !important; }
                     placeholder="Select Project"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Code: <span className="font-semibold text-gray-500">{selectedProjectCode || "--"}</span>
+                    Code:{" "}
+                    <span className="font-semibold text-gray-500">
+                      {selectedProjectCode || "--"}
+                    </span>
                   </p>
                   {formik.touched.projectType && formik.errors.projectType && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.projectType}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.projectType}
+                    </p>
                   )}
                 </div>
 
@@ -1409,13 +2132,20 @@ body { background: white !important; }
                   <CustomSelect
                     options={paymentCategoryOptions}
                     value={formik.values.paymentCategory}
-                    onChange={(val) => formik.setFieldValue("paymentCategory", val)}
-                    onBlur={() => formik.setFieldTouched("paymentCategory", true)}
+                    onChange={(val) =>
+                      formik.setFieldValue("paymentCategory", val)
+                    }
+                    onBlur={() =>
+                      formik.setFieldTouched("paymentCategory", true)
+                    }
                     placeholder="Select Payment Type"
                   />
-                  {formik.touched.paymentCategory && formik.errors.paymentCategory && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.paymentCategory}</p>
-                  )}
+                  {formik.touched.paymentCategory &&
+                    formik.errors.paymentCategory && (
+                      <p className="text-red-500 text-xs mt-0.5">
+                        {formik.errors.paymentCategory}
+                      </p>
+                    )}
                 </div>
 
                 {/* Year — selectable, same for site payments and deposits */}
@@ -1431,7 +2161,9 @@ body { background: white !important; }
                     placeholder="Select Year"
                   />
                   {formik.touched.year && formik.errors.year && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.year}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.year}
+                    </p>
                   )}
                 </div>
 
@@ -1442,7 +2174,8 @@ body { background: white !important; }
                   </label>
                   <div className="flex items-stretch rounded-md border border-gray-300 overflow-hidden focus-within:ring-1 focus-within:ring-orange-500 bg-white">
                     <span className="flex items-center px-2.5 bg-orange-50 border-r border-gray-300 text-sm font-semibold text-[#EF742C] select-none whitespace-nowrap">
-                      {selectedProjectCode || "--"}{formik.values.year || "----"}
+                      {selectedProjectCode || "--"}
+                      {formik.values.year || "----"}
                     </span>
                     <input
                       type="text"
@@ -1464,21 +2197,34 @@ body { background: white !important; }
                     </p>
                   )}
                   {memberValidationMessage && !isCheckingMember && (
-                    <div className={`mt-1 p-2 border rounded-md ${
-                      memberExists
-                        ? hasExistingReceipt ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"
-                        : "bg-red-50 border-red-200"
-                    }`}>
-                      <p className={`text-xs font-semibold ${
+                    <div
+                      className={`mt-1 p-2 border rounded-md ${
                         memberExists
-                          ? hasExistingReceipt ? "text-green-800" : "text-yellow-800"
-                          : "text-red-800"
-                      }`}>{memberValidationMessage}</p>
+                          ? hasExistingReceipt
+                            ? "bg-green-50 border-green-200"
+                            : "bg-yellow-50 border-yellow-200"
+                          : "bg-red-50 border-red-200"
+                      }`}
+                    >
+                      <p
+                        className={`text-xs font-semibold ${
+                          memberExists
+                            ? hasExistingReceipt
+                              ? "text-green-800"
+                              : "text-yellow-800"
+                            : "text-red-800"
+                        }`}
+                      >
+                        {memberValidationMessage}
+                      </p>
                     </div>
                   )}
-                  {formik.touched.seniorityNumber && formik.errors.seniorityNumber && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.seniorityNumber}</p>
-                  )}
+                  {formik.touched.seniorityNumber &&
+                    formik.errors.seniorityNumber && (
+                      <p className="text-red-500 text-xs mt-0.5">
+                        {formik.errors.seniorityNumber}
+                      </p>
+                    )}
                 </div>
 
                 {/* Name */}
@@ -1498,9 +2244,12 @@ body { background: white !important; }
                         : "border-gray-300 focus:ring-orange-500"
                     }`}
                   />
-                  {formik.touched.receivedFrom && formik.errors.receivedFrom && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.receivedFrom}</p>
-                  )}
+                  {formik.touched.receivedFrom &&
+                    formik.errors.receivedFrom && (
+                      <p className="text-red-500 text-xs mt-0.5">
+                        {formik.errors.receivedFrom}
+                      </p>
+                    )}
                 </div>
 
                 {/* Payment Mode — CustomSelect */}
@@ -1528,11 +2277,18 @@ body { background: white !important; }
                         <input
                           type="text"
                           value={tid}
-                          onChange={(e) => updateTransactionId(index, e.target.value)}
+                          onChange={(e) =>
+                            updateTransactionId(index, e.target.value)
+                          }
                           className="w-[340px] px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
                         />
                       </div>
                     ))}
+                    {formik.touched.chequeNo && formik.errors.chequeNo && (
+                      <p className="text-red-500 text-xs mt-0.5">
+                        {formik.errors.chequeNo}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1541,13 +2297,20 @@ body { background: white !important; }
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Paid Amount <span className="text-red-500">*</span>
                   </label>
-                  <input type="text" value={`₹${total.toLocaleString()}`} readOnly className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 focus:outline-none" />
+                  <input
+                    type="text"
+                    value={`₹${total.toLocaleString()}`}
+                    readOnly
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-50 focus:outline-none"
+                  />
                 </div>
 
                 {/* Site Dimension — hidden for Fixed/Recurring Deposit */}
                 {!isDeposit && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Site Dimension</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Site Dimension
+                    </label>
                     <input
                       type="text"
                       name="siteDimension"
@@ -1556,7 +2319,9 @@ body { background: white !important; }
                       onBlur={formik.handleBlur}
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Auto-filled from Site Booking if available</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Auto-filled from Site Booking if available
+                    </p>
                   </div>
                 )}
 
@@ -1572,7 +2337,9 @@ body { background: white !important; }
                           <CustomSelect
                             options={bankOptions}
                             value={bankEntry.bank}
-                            onChange={(val) => updateBankField(index, "bank", val)}
+                            onChange={(val) =>
+                              updateBankField(index, "bank", val)
+                            }
                             placeholder="Select Bank"
                           />
                         </div>
@@ -1586,6 +2353,11 @@ body { background: white !important; }
                         </div>
                       </div>
                     ))}
+                    {formik.touched.bankName && formik.errors.bankName && (
+                      <p className="text-red-500 text-xs mt-0.5">
+                        {formik.errors.bankName}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1601,11 +2373,15 @@ body { background: white !important; }
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
-                      formik.touched.phoneNumber && formik.errors.phoneNumber ? "border-red-500 focus:ring-orange-500" : "border-gray-300 focus:ring-orange-500"
+                      formik.touched.phoneNumber && formik.errors.phoneNumber
+                        ? "border-red-500 focus:ring-orange-500"
+                        : "border-gray-300 focus:ring-orange-500"
                     }`}
                   />
                   {formik.touched.phoneNumber && formik.errors.phoneNumber && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.phoneNumber}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.phoneNumber}
+                    </p>
                   )}
                 </div>
 
@@ -1621,11 +2397,15 @@ body { background: white !important; }
                     onBlur={formik.handleBlur}
                     value={formik.values.Email}
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
-                      formik.touched.Email && formik.errors.Email ? "border-red-500 focus:ring-orange-500" : "border-gray-300 focus:ring-orange-500"
+                      formik.touched.Email && formik.errors.Email
+                        ? "border-red-500 focus:ring-orange-500"
+                        : "border-gray-300 focus:ring-orange-500"
                     }`}
                   />
                   {formik.touched.Email && formik.errors.Email && (
-                    <div className="text-red-500 text-xs mt-1">{formik.errors.Email}</div>
+                    <div className="text-red-500 text-xs mt-1">
+                      {formik.errors.Email}
+                    </div>
                   )}
                 </div>
 
@@ -1642,7 +2422,9 @@ body { background: white !important; }
                     maxDate={new Date().toISOString().split("T")[0]}
                   />
                   {formik.touched.receiptDate && formik.errors.receiptDate && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.receiptDate}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.receiptDate}
+                    </p>
                   )}
                 </div>
 
@@ -1656,7 +2438,9 @@ body { background: white !important; }
                       <CustomSelect
                         options={addressOptions}
                         value={formik.values.flatNumber}
-                        onChange={(val) => formik.setFieldValue("flatNumber", val)}
+                        onChange={(val) =>
+                          formik.setFieldValue("flatNumber", val)
+                        }
                       />
                     </div>
                   )}
@@ -1668,14 +2452,20 @@ body { background: white !important; }
                     rows="2"
                     placeholder="Complete address with pincode"
                     className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 ${
-                      formik.touched.flatNumber && formik.errors.flatNumber ? "border-red-500 focus:ring-orange-500" : "border-gray-300 focus:ring-orange-500"
+                      formik.touched.flatNumber && formik.errors.flatNumber
+                        ? "border-red-500 focus:ring-orange-500"
+                        : "border-gray-300 focus:ring-orange-500"
                     }`}
                   />
                   {memberAddresses.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-0.5">Select from dropdown or type a custom address above</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Select from dropdown or type a custom address above
+                    </p>
                   )}
                   {formik.touched.flatNumber && formik.errors.flatNumber && (
-                    <p className="text-red-500 text-xs mt-0.5">{formik.errors.flatNumber}</p>
+                    <p className="text-red-500 text-xs mt-0.5">
+                      {formik.errors.flatNumber}
+                    </p>
                   )}
                 </div>
               </div>
@@ -1687,7 +2477,9 @@ body { background: white !important; }
                 </h3>
                 {paymentItemsError && (
                   <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
-                    <p className="text-red-600 text-xs font-semibold">{paymentItemsError}</p>
+                    <p className="text-red-600 text-xs font-semibold">
+                      {paymentItemsError}
+                    </p>
                   </div>
                 )}
 
@@ -1697,38 +2489,50 @@ body { background: white !important; }
                     type="number"
                     min="0"
                     value={enteredAmount}
-                    onChange={(e) => { setEnteredAmount(e.target.value); setPaymentItemsError(""); }}
+                    onChange={(e) => {
+                      setEnteredAmount(e.target.value);
+                      setPaymentItemsError("");
+                    }}
                     disabled={!isDeposit && !bookingBreakdown}
                     placeholder={
                       isDeposit
                         ? `Amount for this ${formik.values.paymentCategory}`
-                        : bookingBreakdown ? "Amount received from client" : "Enter Membership Id first"
+                        : bookingBreakdown
+                          ? "Amount received from client"
+                          : "Enter Membership Id first"
                     }
                     className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:bg-gray-100"
                   />
                 </div>
 
                 {/* How this amount is being allocated (live preview) — site only */}
-                {!isDeposit && bookingBreakdown && previewAllocations.length > 0 && (
-                  <div className="mb-3 p-3 rounded-md bg-orange-50 border border-orange-200">
-                    <p className="text-[10px] text-[#EF742C] mb-2 font-semibold uppercase tracking-wide">
-                      This payment will be recorded as
-                    </p>
-                    <div className="flex flex-col gap-1">
-                      {previewAllocations.map((a, i) => (
-                        <div key={i} className="flex justify-between text-xs">
-                          <span className="font-semibold text-gray-700">{a.label}</span>
-                          <span className="font-semibold text-[#EF742C]">₹{a.amount.toLocaleString("en-IN")}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {previewLeftover > 0 && (
-                      <p className="text-[11px] text-red-600 mt-2 font-semibold">
-                        ₹{previewLeftover.toLocaleString("en-IN")} exceeds the remaining schedule.
+                {!isDeposit &&
+                  bookingBreakdown &&
+                  previewAllocations.length > 0 && (
+                    <div className="mb-3 p-3 rounded-md bg-orange-50 border border-orange-200">
+                      <p className="text-[10px] text-[#EF742C] mb-2 font-semibold uppercase tracking-wide">
+                        This payment will be recorded as
                       </p>
-                    )}
-                  </div>
-                )}
+                      <div className="flex flex-col gap-1">
+                        {previewAllocations.map((a, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="font-semibold text-gray-700">
+                              {a.label}
+                            </span>
+                            <span className="font-semibold text-[#EF742C]">
+                              ₹{a.amount.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {previewLeftover > 0 && (
+                        <p className="text-[11px] text-red-600 mt-2 font-semibold">
+                          ₹{previewLeftover.toLocaleString("en-IN")} exceeds the
+                          remaining schedule.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                 {/* Deposit preview — simple single-line confirmation */}
                 {isDeposit && enteredNum > 0 && (
@@ -1737,8 +2541,12 @@ body { background: white !important; }
                       This payment will be recorded as
                     </p>
                     <div className="flex justify-between text-xs">
-                      <span className="font-semibold text-gray-700">{formik.values.paymentCategory}</span>
-                      <span className="font-semibold text-[#EF742C]">₹{enteredNum.toLocaleString("en-IN")}</span>
+                      <span className="font-semibold text-gray-700">
+                        {formik.values.paymentCategory}
+                      </span>
+                      <span className="font-semibold text-[#EF742C]">
+                        ₹{enteredNum.toLocaleString("en-IN")}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1746,25 +2554,39 @@ body { background: white !important; }
                 {/* Full schedule: every bucket with due / paid / remaining — site only */}
                 {!isDeposit && bookingBreakdown && (
                   <div className="border border-gray-200 rounded-md p-2 mb-3">
-                    <p className="text-[10px] text-gray-400 mb-2 font-medium uppercase tracking-wide">{paymentPlan === "full" ? "Full Payment" : "Payment Schedule"}</p>
+                    <p className="text-[10px] text-gray-400 mb-2 font-medium uppercase tracking-wide">
+                      {paymentPlan === "full"
+                        ? "Full Payment"
+                        : "Payment Schedule"}
+                    </p>
                     <div className="flex flex-col gap-1.5">
                       {scheduleBuckets.map((b) => {
-                        const alloc = previewAllocations.find((a) => a.bucket === b.name);
+                        const alloc = previewAllocations.find(
+                          (a) => a.bucket === b.name,
+                        );
                         const applyingNow = alloc ? alloc.amount : 0;
                         const isFull = b.remaining <= 0 && b.due > 0;
-                        const afterRemaining = Math.max(0, b.remaining - applyingNow);
+                        const afterRemaining = Math.max(
+                          0,
+                          b.remaining - applyingNow,
+                        );
 
                         let rowBg, labelColor, badge;
                         if (isFull) {
                           rowBg = "bg-green-50 border border-green-200";
                           labelColor = "text-green-700";
-                          badge = <span className="ml-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">✓ PAID</span>;
+                          badge = (
+                            <span className="ml-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">
+                              ✓ PAID
+                            </span>
+                          );
                         } else if (applyingNow > 0) {
                           rowBg = "bg-orange-100/70 border border-orange-300";
                           labelColor = "text-[#EF742C]";
                           badge = (
                             <span className="ml-1 text-[10px] bg-orange-200 text-[#EF742C] px-1.5 py-0.5 rounded-full font-semibold">
-                              +₹{applyingNow.toLocaleString("en-IN")} now · ₹{afterRemaining.toLocaleString("en-IN")} left
+                              +₹{applyingNow.toLocaleString("en-IN")} now · ₹
+                              {afterRemaining.toLocaleString("en-IN")} left
                             </span>
                           );
                         } else if (b.paid > 0) {
@@ -1772,19 +2594,31 @@ body { background: white !important; }
                           labelColor = "text-orange-700";
                           badge = (
                             <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">
-                              ₹{b.paid.toLocaleString("en-IN")} paid · ₹{b.remaining.toLocaleString("en-IN")} pending
+                              ₹{b.paid.toLocaleString("en-IN")} paid · ₹
+                              {b.remaining.toLocaleString("en-IN")} pending
                             </span>
                           );
                         } else {
                           rowBg = "bg-gray-50 border border-gray-200";
                           labelColor = "text-gray-600";
-                          badge = <span className="ml-1 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-semibold">₹{b.due.toLocaleString("en-IN")} due</span>;
+                          badge = (
+                            <span className="ml-1 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-semibold">
+                              ₹{b.due.toLocaleString("en-IN")} due
+                            </span>
+                          );
                         }
 
                         return (
-                          <div key={b.name} className={`flex items-center gap-2 p-2 rounded-md ${rowBg}`}>
+                          <div
+                            key={b.name}
+                            className={`flex items-center gap-2 p-2 rounded-md ${rowBg}`}
+                          >
                             <div className="flex-1 min-w-0">
-                              <span className={`text-xs font-semibold ${labelColor}`}>{b.name}</span>
+                              <span
+                                className={`text-xs font-semibold ${labelColor}`}
+                              >
+                                {b.name}
+                              </span>
                               {badge}
                             </div>
                             <span className="text-xs text-gray-500 flex-shrink-0">
@@ -1800,17 +2634,40 @@ body { background: white !important; }
                 {/* Optional extra fees (Share / Penalty / Miscellaneous …) */}
                 <div className="border border-gray-200 rounded-md p-2">
                   <p className="text-[10px] text-gray-400 mb-2 font-medium uppercase tracking-wide">
-                    Optional Fees <span className="normal-case">(added on top of the amount above)</span>
+                    Optional Fees{" "}
+                    <span className="normal-case">
+                      (added on top of the amount above)
+                    </span>
                   </p>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                     {optionalFees.map((fee, index) => (
-                      <div key={fee.name} className="flex items-center gap-2 p-1.5 bg-gray-50 rounded hover:bg-gray-100 transition">
-                        <input type="checkbox" checked={fee.checked}
-                          onChange={(e) => updateOptionalFee(index, "checked", e.target.checked)}
-                          className="w-3.5 h-3.5 flex-shrink-0 cursor-pointer" />
-                        <label className="flex-1 text-xs font-medium text-gray-700 min-w-0 truncate">{fee.name}</label>
-                        <input type="number" value={fee.amount || ""} min="0" placeholder="₹"
-                          onChange={(e) => updateOptionalFee(index, "amount", e.target.value)}
+                      <div
+                        key={fee.name}
+                        className="flex items-center gap-2 p-1.5 bg-gray-50 rounded hover:bg-gray-100 transition"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={fee.checked}
+                          onChange={(e) =>
+                            updateOptionalFee(
+                              index,
+                              "checked",
+                              e.target.checked,
+                            )
+                          }
+                          className="w-3.5 h-3.5 flex-shrink-0 cursor-pointer"
+                        />
+                        <label className="flex-1 text-xs font-medium text-gray-700 min-w-0 truncate">
+                          {fee.name}
+                        </label>
+                        <input
+                          type="number"
+                          value={fee.amount || ""}
+                          min="0"
+                          placeholder="₹"
+                          onChange={(e) =>
+                            updateOptionalFee(index, "amount", e.target.value)
+                          }
                           disabled={!fee.checked}
                           className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:border-orange-500 focus:outline-none disabled:bg-gray-100 flex-shrink-0"
                         />
@@ -1821,12 +2678,20 @@ body { background: white !important; }
               </div>
 
               {/* Total */}
-              <div className={`border rounded-md p-3 ${total > 0 ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}>
-                <div className={`text-sm font-semibold ${total > 0 ? "text-green-800" : "text-gray-600"}`}>
+              <div
+                className={`border rounded-md p-3 ${total > 0 ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}
+              >
+                <div
+                  className={`text-sm font-semibold ${total > 0 ? "text-green-800" : "text-gray-600"}`}
+                >
                   Total Amount: ₹{total.toLocaleString("en-IN")}
                 </div>
-                <div className={`text-xs mt-0.5 ${total > 0 ? "text-green-600" : "text-gray-500"}`}>
-                  {total > 0 ? `${amountInWords} Rupees Only` : "No amount selected"}
+                <div
+                  className={`text-xs mt-0.5 ${total > 0 ? "text-green-600" : "text-gray-500"}`}
+                >
+                  {total > 0
+                    ? `${amountInWords} Rupees Only`
+                    : "No amount selected"}
                 </div>
               </div>
 
@@ -1844,7 +2709,9 @@ body { background: white !important; }
                   onClick={handleDownloadPDF}
                   disabled={isGeneratingPDF || !memberExists}
                   className={`px-10 py-2 bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white text-sm font-semibold rounded-full shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 ${
-                    isGeneratingPDF || !memberExists ? "opacity-50 cursor-not-allowed" : ""
+                    isGeneratingPDF || !memberExists
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
                   }`}
                 >
                   {isGeneratingPDF ? "Generating..." : "GENERATE RECEIPT"}
@@ -1854,33 +2721,66 @@ body { background: white !important; }
           </div>
         </form>
 
-        <div style={{ display: "none" }}><div ref={receiptRef} /></div>
+        <div style={{ display: "none" }}>
+          <div ref={receiptRef} />
+        </div>
 
         {/* Preview Modal */}
         {showPreviewModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setShowPreviewModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[950px] max-h-[95vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowPreviewModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-[950px] max-h-[95vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-semibold text-gray-800">Receipt Preview</span>
-                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-medium">Preview Only</span>
+                  <span className="text-lg font-semibold text-gray-800">
+                    Receipt Preview
+                  </span>
+                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-medium">
+                    Preview Only
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => { setShowPreviewModal(false); handleDownloadPDF(); }}
+                    onClick={() => {
+                      setShowPreviewModal(false);
+                      handleDownloadPDF();
+                    }}
                     disabled={isGeneratingPDF || !memberExists}
                     className={`px-6 py-2 bg-gradient-to-r from-orange-200 via-orange-500 to-orange-600 text-white text-sm font-semibold rounded-full hover:opacity-90 transition ${
-                      isGeneratingPDF || !memberExists ? "opacity-50 cursor-not-allowed" : ""
+                      isGeneratingPDF || !memberExists
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
                     }`}
                   >
                     {isGeneratingPDF ? "Generating..." : "Generate PDF"}
                   </button>
-                  <button type="button" onClick={() => setShowPreviewModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-lg font-bold">✕</button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviewModal(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-lg font-bold"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
               <div className="overflow-y-auto flex-1 p-6 bg-gray-100">
-                <div style={{ width: "210mm", minHeight: "297mm", margin: "0 auto", backgroundColor: "#ffffff", padding: "6px 6px", boxSizing: "border-box", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+                <div
+                  style={{
+                    width: "210mm",
+                    minHeight: "297mm",
+                    margin: "0 auto",
+                    backgroundColor: "#ffffff",
+                    padding: "6px 6px",
+                    boxSizing: "border-box",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                  }}
+                >
                   {isDeposit ? <DepositReceiptContent /> : <ReceiptContent />}
                 </div>
               </div>

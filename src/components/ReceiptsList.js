@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Header } from "./Header";
 import { generateReceiptPDF } from "../utils/generateReceiptPDF";
 
@@ -8,26 +8,28 @@ const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 // ── Membership Id formatting (parity with ReceiptForm) ──
 //
 // ReceiptForm builds ids as CODE + 4-digit YEAR + OPTIONAL single series
-// letter + zero-padded number, e.g. GK20260005 / GK2023P0003.
-//
-// Receipts already in the database were written under the old 3-digit rule
-// (GK2023P003) or with no padding at all (GK20265), so the list has to
-// re-pad on read instead of trusting the stored string. Keep this constant
-// in step with MEMBERSHIP_DIGITS in ReceiptForm — if the two ever disagree,
-// the list will display ids that the form's lookup can never build.
+// letter + zero-padded number, e.g. GK20260005 / GK2023P0003. Keep this in
+// step with MEMBERSHIP_DIGITS in ReceiptForm — if the two disagree, the list
+// shows ids the form's lookup can never build.
 const MEMBERSHIP_DIGITS = 4;
 
-// The stored value exactly as the backend has it (canonical field is
-// `membershipid`; older receipts may only carry the legacy `seniority_no`).
-const getRawMembershipId = (receipt) =>
-  receipt?.membershipid || receipt?.seniority_no || "";
-
-// Normalise a stored id into the form's canonical shape.
+// The stored value, whatever spelling the record happens to use.
 //
-// The series letter is deliberately kept OUT of the padding — padding the
-// whole tail would turn "P3" into "00P3" and produce an id that matches no
-// member record. Anything that doesn't parse is returned untouched rather
-// than mangled, so a malformed legacy id is still visible to the admin.
+// Three spellings exist in this codebase: the form POSTs `membershipid`, the
+// form's own receipt filter reads `membership_id`, and old rows carry
+// `seniority_no`. Until the backend is normalised, read all of them — a row
+// written under one spelling would otherwise render a blank id column and
+// look "missing" even though it loaded fine.
+const getRawMembershipId = (receipt) =>
+  receipt?.membershipid ||
+  receipt?.membership_id ||
+  receipt?.seniority_no ||
+  "";
+
+// Normalise into the form's canonical shape. The series letter stays OUT of
+// the padding — padding the whole tail turns "P3" into "00P3", an id that
+// matches no member record. Unparseable values pass through untouched so a
+// malformed legacy id stays visible instead of being mangled or hidden.
 const formatMembershipId = (raw) => {
   const value = String(raw || "").trim().toUpperCase();
   if (!value) return "";
@@ -37,9 +39,31 @@ const formatMembershipId = (raw) => {
   return `${code}${year}${letter}${digits.padStart(MEMBERSHIP_DIGITS, "0")}`;
 };
 
-// Display helper used everywhere the id is rendered.
 const getMembershipId = (receipt) =>
   formatMembershipId(getRawMembershipId(receipt));
+
+// Insertion time, used for ordering. `date` is the RECEIPT date and an admin
+// can backdate it, so sorting on that alone can bury a receipt created today
+// halfway down the table and make it look like it never saved. Prefer real
+// creation time; a Mongo ObjectId carries it in its first 4 bytes.
+const getCreatedAt = (receipt) => {
+  if (receipt?.createdAt) return new Date(receipt.createdAt).getTime();
+  const id = receipt?._id;
+  if (typeof id === "string" && /^[0-9a-f]{24}$/i.test(id)) {
+    return parseInt(id.substring(0, 8), 16) * 1000;
+  }
+  if (receipt?.date) return new Date(receipt.date).getTime();
+  return 0;
+};
+
+// GET /receipts has returned both `{ data: [...] }` and a bare array across
+// versions of this API. Accept either rather than silently rendering nothing.
+const unwrapReceipts = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.receipts)) return payload.receipts;
+  return [];
+};
 
 export function ReceiptList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
@@ -60,6 +84,8 @@ export function ReceiptList() {
   const [editData, setEditData] = useState({});
   const [downloadingId, setDownloadingId] = useState(null);
   const [memberImage, setMemberImage] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   // Download receipt PDF — same format as ReceiptForm
   const handleDownloadReceipt = async (receipt) => {
@@ -74,15 +100,38 @@ export function ReceiptList() {
     }
   };
 
-  useEffect(() => {
-    axios
-      .get(`${API_BASE}/receipts`)
-      .then((response) => {
-        SetMemberDetails(response.data.data || []);
-        setFilteredMembers(response.data.data || []);
-      })
-      .catch((err) => console.error("Unable to fetch the data", err));
+  const fetchReceipts = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const response = await axios.get(`${API_BASE}/receipts`);
+      const rows = unwrapReceipts(response.data);
+      // Newest-created first, so a receipt just generated is always row 1.
+      rows.sort((a, b) => getCreatedAt(b) - getCreatedAt(a));
+      SetMemberDetails(rows);
+    } catch (err) {
+      console.error("Unable to fetch the data", err);
+      setLoadError(err?.response?.status
+        ? `Failed to load receipts (HTTP ${err.response.status})`
+        : "Failed to load receipts — check the API connection.");
+      SetMemberDetails([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchReceipts();
+  }, [fetchReceipts]);
+
+  // The list used to load once and never again. Generating a receipt in
+  // another tab, then switching back here, showed a stale table and looked
+  // exactly like the save had failed. Refetch whenever the tab regains focus.
+  useEffect(() => {
+    const onFocus = () => fetchReceipts();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchReceipts]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -91,16 +140,19 @@ export function ReceiptList() {
       return;
     }
     const q = query.toLowerCase();
-    // Normalising the query too means an admin can type the id either way —
-    // "GK2023P3", "GK2023P003" and "GK2023P0003" all find the same receipt,
-    // regardless of which padding the record was stored with.
+    // Normalising the query too means "GK2023P3", "GK2023P003" and
+    // "GK2023P0003" all find the same receipt, whatever padding it was
+    // stored with. Name is included so a search that misses on id still
+    // surfaces the row instead of showing an empty table.
     const normalizedQuery = formatMembershipId(query).toLowerCase();
     const filtered = Memberdetails.filter((member) => {
       const raw = getRawMembershipId(member).toLowerCase();
       const formatted = getMembershipId(member).toLowerCase();
+      const name = String(member?.name || "").toLowerCase();
       return (
         raw.includes(q) ||
         formatted.includes(q) ||
+        name.includes(q) ||
         (!!normalizedQuery && formatted.includes(normalizedQuery))
       );
     });
@@ -117,9 +169,9 @@ export function ReceiptList() {
     setIsEditing(false);
     setMemberImage(null);
 
-    // Fetch member profile image using membership_id.
-    // Both sides are normalised before comparing — the member record and the
-    // receipt can legitimately carry different padding for the same person.
+    // Fetch member profile image. Both sides are normalised before comparing —
+    // the member record and the receipt can carry different padding for the
+    // same person, which silently broke this lookup.
     try {
       const res = await axios.get(`${API_BASE}/members`);
       const members = res.data.data || [];
@@ -158,11 +210,6 @@ export function ReceiptList() {
       SetMemberDetails(
         Memberdetails.map((m) => (m._id === selectedMember._id ? editData : m)),
       );
-      setFilteredMembers(
-        filteredMembers.map((m) =>
-          m._id === selectedMember._id ? editData : m,
-        ),
-      );
       setSelectedMember(editData);
       setIsEditing(false);
       alert("Receipt updated successfully!");
@@ -193,12 +240,24 @@ export function ReceiptList() {
       <Header />
       <div className="px-[50px] pt-[50px]">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="font-semibold text-[24px]">All Receipt List</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-semibold text-[24px]">All Receipt List</h1>
+            <span className="text-xs bg-orange-100 text-[#EF742C] px-2 py-1 rounded-full font-semibold">
+              {isLoading ? "Loading…" : `${Memberdetails.length} total`}
+            </span>
+            <button
+              onClick={fetchReceipts}
+              disabled={isLoading}
+              className="text-xs font-semibold text-[#EF742C] border border-[#EF742C] px-3 py-1 rounded-full hover:bg-orange-50 disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </div>
           <div className="relative w-[300px]">
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search by Membership Id"
+                placeholder="Search by Membership Id or Name"
                 value={searchQuery}
                 onChange={handleSearchChange}
                 className="w-full px-4 py-2 pl-10 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
@@ -245,6 +304,11 @@ export function ReceiptList() {
             )}
           </div>
         </div>
+        {loadError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium">
+            {loadError}
+          </div>
+        )}
       </div>
 
       <div className="w-full max-w-[1120px] mx-auto p-6">
@@ -263,9 +327,9 @@ export function ReceiptList() {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {filteredMembers.map((member, rowIndex) => (
+              {filteredMembers.map((member) => (
                 <tr
-                  key={rowIndex}
+                  key={member._id || getMembershipId(member)}
                   className={`border-b border-gray-200 text-start text-[14px] transition-colors duration-200 ${member.cancelled ? "bg-red-50" : "hover:bg-orange-50"}`}
                 >
                   <td className="px-6 py-4 text-gray-700 font-medium">
@@ -337,9 +401,11 @@ export function ReceiptList() {
           </table>
           {filteredMembers.length === 0 && (
             <div className="p-6 text-center text-red-600">
-              {searchQuery
-                ? `No receipts found for "${searchQuery}"`
-                : "Not found."}
+              {isLoading
+                ? "Loading receipts…"
+                : searchQuery
+                  ? `No receipts found for "${searchQuery}"`
+                  : "Not found."}
             </div>
           )}
         </div>
