@@ -29,6 +29,7 @@ import { MemberProtectedRoute } from "./components/MemberProtectedRoute";
 import { MemberDashboard } from "./components/MemberDashboard";
 import { InwardOutward } from "./components/InwardOutward";
 import { UpcomingPayments } from "./components/UpcomingPayments";
+import Festivals from "./components/Festivals";
 import { BankStatement } from "./components/BankStatement";
 import { FixedDepositForm } from "./components/FixedDepositForm";
 import { RecurringDepositForm } from "./components/RecurringDepositForm";
@@ -180,6 +181,14 @@ const MainApp = () => {
             }
           />
           <Route
+            path="/superadmin/festivals"
+            element={
+              <SuperAdminProtectedRoute>
+                <Festivals />
+              </SuperAdminProtectedRoute>
+            }
+          />
+          <Route
             path="/superadmin/bankstatement"
             element={
               <SuperAdminProtectedRoute>
@@ -314,6 +323,14 @@ const MainApp = () => {
             element={
               <ProtectedRoute>
                 <UpcomingPayments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/festivals"
+            element={
+              <ProtectedRoute>
+                <Festivals />
               </ProtectedRoute>
             }
           />
