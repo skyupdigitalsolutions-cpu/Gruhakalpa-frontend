@@ -8,6 +8,7 @@ import {
 import "./App.css";
 import { LoginHeader } from "./components/LoginHeader";
 import { AdminLogin } from "./components/AdminLogin";
+import AutomationPanel from "./components/AutomationPanel";
 import { Dashboard } from "./pages/Dashboard";
 import { SuperAdminProtectedRoute } from "./components/SuperAdminProtectedRoute";
 import { AddMember } from "./components/AddMember";
@@ -40,7 +41,7 @@ import { FDCertificateForm } from "./components/FDCertificateForm";
 const MainApp = () => {
   const location = useLocation();
 
-  const noSidebarRoutes = ["/adminlogin", "/memberlogin", "/", "/superadmin"];
+  const noSidebarRoutes = ["/adminlogin", "/memberlogin", "/", "/superadmin", "/automation"];
 
   const superAdminRoutes = [
     "/superadmin/dashboard",
@@ -82,6 +83,7 @@ const MainApp = () => {
           {/* Public Routes */}
           <Route path="/" element={<Navigate to="/adminlogin" replace />} />
           <Route path="/adminlogin" element={<AdminLogin />} />
+          <Route path="/automation" element={<AutomationPanel />} />
           {/* ✅ Redirect any casing variation to lowercase */}
           <Route
             path="/adminLogin"
