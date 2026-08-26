@@ -319,7 +319,7 @@ export function ReceiptList() {
                 {headers.map((header, index) => (
                   <th
                     key={index}
-                    className="px-6 py-4 text-start text-white font-semibold text-base tracking-wide"
+                    className="px-4 py-4 text-start text-white font-semibold text-base tracking-wide"
                   >
                     {header}
                   </th>
