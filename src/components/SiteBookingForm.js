@@ -528,7 +528,10 @@ export function SiteBookingForm() {
         .required("Name is required")
         .min(3, "Minimum 3 characters required")
         .max(50, "Maximum 50 characters required")
-        .matches(/^[A-Za-z\s]+$/, "Only letters and spaces allowed"),
+        .matches(
+          /^[A-Za-z\s.\/&'-]+$/,
+          "Only letters, spaces and . / & ' - are allowed",
+        ),
       MobileNumber: yup
         .string()
         .required("Mobile number is required")
