@@ -530,9 +530,18 @@ export function MemberList() {
                         Name:
                       </dt>
                       &nbsp;
-                      <dd className="font-semibold text-[16px] text-[#595757]">
-                        {selectedMember.name || "-"}
-                      </dd>
+                      {isEditing && !selectedMember?.cancelled ? (
+                        <input
+                          name="name"
+                          value={editData.name || ""}
+                          onChange={handleEditChange}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm w-[170px]"
+                        />
+                      ) : (
+                        <dd className="font-semibold text-[16px] text-[#595757]">
+                          {selectedMember.name || "-"}
+                        </dd>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -546,9 +555,18 @@ export function MemberList() {
                         Membership Id:
                       </dt>
                       &nbsp;
-                      <dd className="font-semibold text-[16px] text-[#595757]">
-                        {selectedMember.membership_id || "-"}
-                      </dd>
+                      {isEditing && !selectedMember?.cancelled ? (
+                        <input
+                          name="membership_id"
+                          value={editData.membership_id || ""}
+                          onChange={handleEditChange}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm w-[150px]"
+                        />
+                      ) : (
+                        <dd className="font-semibold text-[16px] text-[#595757]">
+                          {selectedMember.membership_id || "-"}
+                        </dd>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -562,9 +580,18 @@ export function MemberList() {
                         Mobile:
                       </dt>
                       &nbsp;
-                      <dd className="font-semibold text-[16px] text-[#595757]">
-                        {selectedMember.mobile || "-"}
-                      </dd>
+                      {isEditing && !selectedMember?.cancelled ? (
+                        <input
+                          name="mobile"
+                          value={editData.mobile || ""}
+                          onChange={handleEditChange}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm w-[150px]"
+                        />
+                      ) : (
+                        <dd className="font-semibold text-[16px] text-[#595757]">
+                          {selectedMember.mobile || "-"}
+                        </dd>
+                      )}
                     </div>
                   </div>
                 </dl>
