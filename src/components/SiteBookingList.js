@@ -32,7 +32,14 @@ export function SiteBookingList() {
   const isAdmin = !!localStorage.getItem("adminToken");
   const canCancel = isSuperAdmin || isAdmin;
 
-  const headers = ["Date", "Member Name", "Membership Id", "Project Name", ""];
+  const headers = [
+    "Booking Date",
+    "Member Name",
+    "Membership Id",
+    "Project Name",
+    "Site Dimension",
+    "",
+  ];
   const [Memberdetails, SetMemberDetails] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -186,6 +193,7 @@ export function SiteBookingList() {
     const payload = {
       membership_id: editData.membership_id,
       name: editData.name,
+      mobilenumber: editData.mobilenumber,
       projectname: editData.projectname,
       sitedimension: editData.sitedimension,
       totalamount: editData.totalamount,
@@ -444,6 +452,35 @@ export function SiteBookingList() {
     </div>
   );
 
+  // Format a date value (Date / ISO string) as yyyy-mm-dd for <input type="date">
+  const toDateInputValue = (val) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Editable date field (renders a native date picker when editing)
+  const editDateField = (label, name, value) => (
+    <div className="border-b border-gray-200 pb-4">
+      <dt className="inline font-semibold">{label}: </dt>
+      {isEditing && !selectedMember?.cancelled ? (
+        <input
+          type="date"
+          name={name}
+          value={toDateInputValue(editData[name])}
+          onChange={handleEditChange}
+          className="border border-gray-300 rounded px-2 py-1 text-sm ml-1"
+        />
+      ) : (
+        <dd className="inline font-normal">{value ? fmtDate(value) : "-"}</dd>
+      )}
+    </div>
+  );
+
   const cancelledCount = Memberdetails.filter((m) => m.cancelled).length;
 
   return (
@@ -581,6 +618,9 @@ export function SiteBookingList() {
                   </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {member.projectname || "-"}
+                  </td>
+                  <td className="px-6 py-4 text-gray-700 font-medium">
+                    {member.sitedimension || "-"}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-center items-center gap-2">
@@ -742,9 +782,18 @@ export function SiteBookingList() {
                           Name:
                         </dt>
                         &nbsp;
-                        <dd className="font-semibold text-[16px] text-[#595757]">
-                          {selectedMember.name || "-"}
-                        </dd>
+                        {isEditing && !selectedMember?.cancelled ? (
+                          <input
+                            name="name"
+                            value={editData.name || ""}
+                            onChange={handleEditChange}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-[170px]"
+                          />
+                        ) : (
+                          <dd className="font-semibold text-[16px] text-[#595757]">
+                            {selectedMember.name || "-"}
+                          </dd>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -776,9 +825,18 @@ export function SiteBookingList() {
                           Mobile:
                         </dt>
                         &nbsp;
-                        <dd className="font-semibold text-[16px] text-[#595757]">
-                          {selectedMember.mobilenumber || "-"}
-                        </dd>
+                        {isEditing && !selectedMember?.cancelled ? (
+                          <input
+                            name="mobilenumber"
+                            value={editData.mobilenumber || ""}
+                            onChange={handleEditChange}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-[150px]"
+                          />
+                        ) : (
+                          <dd className="font-semibold text-[16px] text-[#595757]">
+                            {selectedMember.mobilenumber || "-"}
+                          </dd>
+                        )}
                       </div>
                     </div>
                   </dl>
@@ -835,6 +893,11 @@ export function SiteBookingList() {
                       "Total Amount",
                       "totalamount",
                       selectedMember.totalamount,
+                    )}
+                    {editDateField(
+                      "Booking Date",
+                      "date",
+                      selectedMember.date,
                     )}
                     {(selectedMember.designation || isEditing) &&
                       editField(
