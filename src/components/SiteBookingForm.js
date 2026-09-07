@@ -411,9 +411,7 @@ const yearOptions = Array.from(
 
 // Site dimensions per project — edit to match your real projects
 const dimensions = {
-  Gruhakalpa: ["30x40", "30x50", "40x60", "50x80"],
-  "New City": ["30x40", "40x60", "50x80"],
-  "Sri Sai Nagar": ["30x40", "30x50"],
+  Gruhakalpa: ["30x40", "30x50", "40x60", "50x60"],
 };
 
 // Parse "WxL" → total sqft
