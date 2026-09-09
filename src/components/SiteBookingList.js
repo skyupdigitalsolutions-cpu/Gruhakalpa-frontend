@@ -92,10 +92,14 @@ export function SiteBookingList() {
       list = list.filter((m) => m.cancelled);
     }
 
-    if (searchQuery.trim() !== "") {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((m) => m.membership_id?.toLowerCase().includes(q));
-    }
+if (searchQuery.trim() !== "") {
+  const q = searchQuery.toLowerCase();
+  list = list.filter(
+    (m) =>
+      m.membership_id?.toLowerCase().includes(q) ||
+      m.name?.toLowerCase().includes(q),
+  );
+}
 
     setFilteredMembers(list);
   }, [searchQuery, Memberdetails, statusFilter]);
