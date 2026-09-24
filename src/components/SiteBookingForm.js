@@ -411,9 +411,7 @@ const yearOptions = Array.from(
 
 // Site dimensions per project — edit to match your real projects
 const dimensions = {
-  Gruhakalpa: ["30x40", "30x50", "40x60", "50x80"],
-  "New City": ["30x40", "40x60", "50x80"],
-  "Sri Sai Nagar": ["30x40", "30x50"],
+  Gruhakalpa: ["30x40", "30x50", "40x60", "50x60"],
 };
 
 // Parse "WxL" → total sqft
@@ -528,7 +526,10 @@ export function SiteBookingForm() {
         .required("Name is required")
         .min(3, "Minimum 3 characters required")
         .max(50, "Maximum 50 characters required")
-        .matches(/^[A-Za-z\s]+$/, "Only letters and spaces allowed"),
+        .matches(
+          /^[A-Za-z\s.\/&'-]+$/,
+          "Only letters, spaces and . / & ' - are allowed",
+        ),
       MobileNumber: yup
         .string()
         .required("Mobile number is required")
