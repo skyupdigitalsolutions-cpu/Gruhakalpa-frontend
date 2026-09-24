@@ -63,6 +63,45 @@ export function ReceiptList() {
   const [memberImage, setMemberImage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+
+  // Superadmin-only hard delete. Backend re-verifies the token belongs to a
+  // superadmin, so hiding the button is only a UI convenience.
+  const handleDeleteReceipt = async (receipt) => {
+    if (!isSuperAdmin || !receipt?._id) return;
+    const label = receipt.receipt_no || getMembershipId(receipt) || "this receipt";
+    const amount = receipt.amountpaid
+      ? ` of Rs.${Number(receipt.amountpaid).toLocaleString("en-IN")}`
+      : "";
+    const confirmed = window.confirm(
+      `Delete receipt ${label}${amount} for ${receipt.name || "this member"}?\n\n` +
+        "This permanently removes the receipt and its amount from the member's paid total. This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeletingId(receipt._id);
+    try {
+      await axios.delete(`${API_BASE}/receipts/${receipt._id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("superAdminToken")}`,
+        },
+      });
+      SetMemberDetails((prev) => prev.filter((m) => m._id !== receipt._id));
+      if (selectedMember?._id === receipt._id) closeModal();
+      alert(`Receipt ${label} deleted successfully.`);
+    } catch (err) {
+      console.error("Error deleting receipt", err);
+      const status = err?.response?.status;
+      const msg =
+        err?.response?.data?.message ||
+        (status === 401
+          ? "Session expired. Please login again."
+          : "Failed to delete receipt.");
+      alert(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleDownloadReceipt = async (receipt) => {
     setDownloadingId(receipt._id);
@@ -245,7 +284,7 @@ export function ReceiptList() {
                 placeholder="Search by Membership Id or Name"
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="w-full px-4 py-2 pl-10 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+                className="w-full px-4 py-2 pl-12 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
               />
               {/* Clear button on the RIGHT */}
               {searchQuery && (
@@ -290,7 +329,7 @@ export function ReceiptList() {
         {/* FIX: overflow-x-auto enables horizontal scroll on small screens */}
         <div className="overflow-x-auto rounded-2xl shadow-lg">
           {/* FIX: min-w-[800px] prevents columns from collapsing/cutting off */}
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="bg-[#EF742C]">
                 {headers.map((header, index) => (
@@ -364,8 +403,37 @@ export function ReceiptList() {
                             </svg>
                             Download
                           </>
-                        )}
+                      )}
                       </button>
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => handleDeleteReceipt(member)}
+                          disabled={deletingId === member._id}
+                          title="Delete receipt"
+                          className="w-[90px] font-medium border-1 py-[6px] px-[10px] border-red-600 rounded text-[14px] text-red-600 hover:bg-red-600 hover:text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                        >
+                          {deletingId === member._id ? (
+                            "..."
+                          ) : (
+                            <>
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                              Delete
+                            </>
+                          )}
+                        </button>
+                      )}
                       {member.cancelled && (
                         <div className="my-2">
                           <span className="bg-red-100 text-red-600 text-center text-xs font-semibold px-2 py-1 mt-2 rounded-full">
@@ -427,6 +495,16 @@ export function ReceiptList() {
                   <span className="bg-red-100 text-red-600 text-sm font-semibold px-4 py-2 rounded-full border border-red-300">
                     ✕ Cancelled
                   </span>
+                )}
+
+                {isSuperAdmin && !isEditing && (
+                  <button
+                    onClick={() => handleDeleteReceipt(selectedMember)}
+                    disabled={deletingId === selectedMember._id}
+                    className="border border-red-600 text-red-600 px-4 py-2 rounded-full font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === selectedMember._id ? "Deleting..." : "Delete"}
+                  </button>
                 )}
 
                 {isSuperAdmin && !selectedMember.cancelled && (

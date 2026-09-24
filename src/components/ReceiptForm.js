@@ -900,8 +900,11 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       )
       .required("Phone number is required"),
     Email: Yup.string()
-      .required("Email is required")
-      .email("Enter valid email"),
+      .trim()
+      .notRequired()
+      .test("optional-email", "Enter valid email", (value) =>
+        !value ? true : Yup.string().email().isValidSync(value),
+      ),
     flatNumber: Yup.string()
       .required("Address is required")
       .min(10, "Please provide complete address (minimum 10 characters)"),
@@ -1293,7 +1296,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
             date: formik.values.receiptDate,
             amountpaid: total,
             mobilenumber: formik.values.phoneNumber,
-            email: formik.values.Email,
+            email: (formik.values.Email || "").trim(),
             paymentmode: formik.values.paymentMode,
             paymenttype: paymentTypeStr,
             allocations: allAllocations,
@@ -1314,7 +1317,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
           if (response?.data?.success) {
             pdf.save(filename);
             toast.success(
-              "✅ Receipt generated, downloaded and emailed successfully!",
+              (formik.values.Email || "").trim()
+                ? "✅ Receipt generated, downloaded and emailed successfully!"
+                : "✅ Receipt generated and downloaded successfully!",
             );
             resetAfterSave();
             if (typeof onReceiptGenerate === "function") {
@@ -2388,7 +2393,8 @@ body { background: white !important; }
                 {/* Email */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Email <span className="text-red-500">*</span>
+                    Email{" "}
+                    <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
                   <input
                     type="email"
