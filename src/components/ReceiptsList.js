@@ -256,10 +256,48 @@ export function ReceiptList() {
   };
 
   const handleSave = async () => {
+    const payload = { ...editData };
+
+    const oldAmount = Math.round(parseFloat(selectedMember.amountpaid) || 0);
+    const newAmount = Math.round(parseFloat(payload.amountpaid) || 0);
+    const oldType = String(selectedMember.paymenttype || "").trim();
+    const newType = String(payload.paymenttype || "").trim();
+    payload.amountpaid = newAmount;
+    payload.paymenttype = newType;
+
+    // Keep the per-bucket split in sync with the edited amount / payment type.
+    // The PDF particulars and the ReceiptForm schedule both read `allocations`,
+    // so leaving it stale shows the old amount/label even after an edit.
+    const allocs = Array.isArray(selectedMember.allocations)
+      ? selectedMember.allocations
+      : [];
+    if ((newAmount !== oldAmount || newType !== oldType) && allocs.length <= 1) {
+      const label = newType || allocs[0]?.label || "";
+      const bucket =
+        newType === oldType && allocs[0]?.bucket
+          ? allocs[0].bucket
+          : /^booking advance/i.test(label)
+          ? "Down Payment"
+          : label;
+      payload.allocations = [{ bucket, label, amount: newAmount }];
+    }
+
+    // Any change to a printed field makes the stored Cloudinary PDF stale —
+    // clear it so Download regenerates the receipt from the current data.
+    const printedFields = [
+      "receipt_no", "name", "membershipid", "projectname", "date",
+      "amountpaid", "paymenttype", "paymentmode", "transactionid",
+      "bank", "sitedimension", "mobilenumber",
+    ];
+    const pdfChanged = printedFields.some(
+      (f) => String(payload[f] ?? "") !== String(selectedMember[f] ?? "")
+    );
+    if (pdfChanged) payload.pdfUrl = null;
+
     try {
       await axios.put(
         `${API_BASE}/receipts/${selectedMember._id}`,
-        editData,
+        payload,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("superAdminToken")}`,
@@ -268,10 +306,10 @@ export function ReceiptList() {
       );
       SetMemberDetails(
         Memberdetails.map((m) =>
-          m._id === selectedMember._id ? editData : m
+          m._id === selectedMember._id ? payload : m
         )
       );
-      setSelectedMember(editData);
+      setSelectedMember(payload);
       setIsEditing(false);
       alert("Receipt updated successfully!");
     } catch (err) {
@@ -463,7 +501,7 @@ export function ReceiptList() {
                 >
                   <td className="px-6 py-4 text-gray-700 font-medium">
                     {member.date
-                      ? new Date(member.date).toLocaleDateString()
+                      ? new Date(member.date).toLocaleDateString("en-GB")
                       : "-"}
                   </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
@@ -744,7 +782,7 @@ export function ReceiptList() {
                     "Receipt Date",
                     "date",
                     selectedMember.date
-                      ? new Date(selectedMember.date).toLocaleDateString()
+                      ? new Date(selectedMember.date).toLocaleDateString("en-GB")
                       : "-"
                   )}
                   {editField(

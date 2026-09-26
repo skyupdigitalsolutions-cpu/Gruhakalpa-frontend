@@ -53,9 +53,15 @@ const buildReceiptHTML = (receipt) => {
   const projectname = receipt.projectname || "Gruhakalpa";
 
   // Build particulars from allocations if available, else single row
-  const allocations = Array.isArray(receipt.allocations) && receipt.allocations.length > 0
-    ? receipt.allocations
-    : [{ label: paymentLabel, amount: amountpaid }];
+  // Only trust the stored split if it still adds up to the paid amount —
+  // otherwise (e.g. amount edited later) print a single row with the current
+  // payment type and amount so particulars always match the total.
+  const storedAllocs = Array.isArray(receipt.allocations) ? receipt.allocations : [];
+  const allocSum = storedAllocs.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+  const allocations =
+    storedAllocs.length > 0 && Math.round(allocSum) === Math.round(amountpaid)
+      ? storedAllocs
+      : [{ label: paymentLabel, amount: amountpaid }];
 
   const tableRows = allocations.map((a, idx) => `
     <tr>
