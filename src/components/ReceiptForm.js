@@ -890,9 +890,9 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       .required("Date is required")
       .typeError("Please select a valid date"),
     receivedFrom: Yup.string()
+      .trim()
       .required("Received from name is required")
-      .min(2, "Minimum 2 characters required")
-      .matches(/^[a-zA-Z\s.]+$/, "Only letters, spaces, and periods allowed"),
+      .min(2, "Minimum 2 characters required"),
     phoneNumber: Yup.string()
       .matches(
         /^(\+?[1-9]\d{0,3}|0)?[6-9]\d{9}$/,
