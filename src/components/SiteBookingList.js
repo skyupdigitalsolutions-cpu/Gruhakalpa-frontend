@@ -27,6 +27,33 @@ const fmtDate = (d) =>
       })
     : "—";
 
+// Local YYYY-MM-DD key for a date value (avoids UTC off-by-one when
+// comparing against <input type="date"> values)
+const toDateKey = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
+// When the record was added: createdAt, else ObjectId timestamp, else booking date
+const getCreatedAt = (row) => {
+  if (row?.createdAt) return new Date(row.createdAt).getTime();
+  const id = row?._id;
+  if (typeof id === "string" && /^[0-9a-f]{24}$/i.test(id)) {
+    return parseInt(id.substring(0, 8), 16) * 1000;
+  }
+  if (row?.date) return new Date(row.date).getTime();
+  return 0;
+};
+
+const getRecordDate = (row) => {
+  const t = row?.date ? new Date(row.date).getTime() : NaN;
+  return isNaN(t) ? 0 : t;
+};
+
 export function SiteBookingList() {
   const isSuperAdmin = !!localStorage.getItem("superAdminToken");
   const isAdmin = !!localStorage.getItem("adminToken");
@@ -44,6 +71,9 @@ export function SiteBookingList() {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | active | cancelled
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("recent"); // recent | oldest | dateDesc | dateAsc
   const [cancelPenalty, setCancelPenalty] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -92,17 +122,49 @@ export function SiteBookingList() {
       list = list.filter((m) => m.cancelled);
     }
 
-if (searchQuery.trim() !== "") {
-  const q = searchQuery.toLowerCase();
-  list = list.filter(
-    (m) =>
-      m.membership_id?.toLowerCase().includes(q) ||
-      m.name?.toLowerCase().includes(q),
-  );
-}
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (m) =>
+          m.membership_id?.toLowerCase().includes(q) ||
+          m.name?.toLowerCase().includes(q),
+      );
+    }
 
-    setFilteredMembers(list);
-  }, [searchQuery, Memberdetails, statusFilter]);
+    // ── Date filter (Booking Date) ──
+    if (fromDate || toDate) {
+      list = list.filter((m) => {
+        const key = toDateKey(m?.date);
+        if (!key) return false;
+        if (fromDate && key < fromDate) return false;
+        if (toDate && key > toDate) return false;
+        return true;
+      });
+    }
+
+    // ── Sort ──
+    const sorted = [...list];
+    if (sortOrder === "recent") {
+      sorted.sort((a, b) => getCreatedAt(b) - getCreatedAt(a));
+    } else if (sortOrder === "oldest") {
+      sorted.sort((a, b) => getCreatedAt(a) - getCreatedAt(b));
+    } else if (sortOrder === "dateDesc") {
+      sorted.sort((a, b) => getRecordDate(b) - getRecordDate(a));
+    } else if (sortOrder === "dateAsc") {
+      sorted.sort((a, b) => getRecordDate(a) - getRecordDate(b));
+    }
+
+    setFilteredMembers(sorted);
+  }, [searchQuery, Memberdetails, statusFilter, fromDate, toDate, sortOrder]);
+
+  const hasActiveFilters =
+    !!searchQuery.trim() || !!fromDate || !!toDate || sortOrder !== "recent";
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setFromDate("");
+    setToDate("");
+    setSortOrder("recent");
+  };
 
   const handleSearchChange = (e) => setSearchQuery(e.target.value);
   const clearSearch = () => setSearchQuery("");
@@ -581,6 +643,62 @@ if (searchQuery.trim() !== "") {
             </div>
           </div>
         </div>
+
+        {/* Date filter + Sort */}
+        <div className="flex flex-wrap items-end gap-4 mb-2 mt-8">
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              From Date
+            </label>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              To Date
+            </label>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              Sort By
+            </label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            >
+              <option value="recent">Recently Added (Newest First)</option>
+              <option value="oldest">Oldest Added First</option>
+              <option value="dateDesc">Booking Date (Newest First)</option>
+              <option value="dateAsc">Booking Date (Oldest First)</option>
+            </select>
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="px-4 py-2 text-sm font-semibold text-[#EF742C] border border-[#EF742C] rounded-lg hover:bg-orange-50"
+            >
+              Clear Filters
+            </button>
+          )}
+          {(fromDate || toDate) && (
+            <span className="text-sm text-gray-600 pb-2">
+              Showing {filteredMembers.length} of {Memberdetails.length}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -657,6 +775,8 @@ if (searchQuery.trim() !== "") {
             <div className="p-6 text-center text-red-600">
               {searchQuery
                 ? `No bookings found for "${searchQuery}"`
+                : fromDate || toDate
+                ? "No bookings found in the selected date range"
                 : "Not found."}
             </div>
           )}

@@ -35,6 +35,22 @@ const getCreatedAt = (receipt) => {
   return 0;
 };
 
+// Local YYYY-MM-DD key for a date value (avoids UTC off-by-one when
+// comparing against <input type="date"> values)
+const toDateKey = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
+const getRecordDate = (row) => {
+  const t = row?.date ? new Date(row.date).getTime() : NaN;
+  return isNaN(t) ? 0 : t;
+};
+
 const unwrapReceipts = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -55,6 +71,9 @@ export function ReceiptList() {
   const [Memberdetails, SetMemberDetails] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("recent"); // recent | oldest | dateDesc | dateAsc
   const [selectedMember, setSelectedMember] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -147,26 +166,60 @@ export function ReceiptList() {
   }, [fetchReceipts]);
 
   useEffect(() => {
+    let list = Memberdetails;
+
+    // ── Search ──
     const query = searchQuery.trim();
-    if (query === "") {
-      setFilteredMembers(Memberdetails);
-      return;
+    if (query !== "") {
+      const q = query.toLowerCase();
+      const normalizedQuery = formatMembershipId(query).toLowerCase();
+      list = list.filter((member) => {
+        const raw = getRawMembershipId(member).toLowerCase();
+        const formatted = getMembershipId(member).toLowerCase();
+        const name = String(member?.name || "").toLowerCase();
+        return (
+          raw.includes(q) ||
+          formatted.includes(q) ||
+          name.includes(q) ||
+          (!!normalizedQuery && formatted.includes(normalizedQuery))
+        );
+      });
     }
-    const q = query.toLowerCase();
-    const normalizedQuery = formatMembershipId(query).toLowerCase();
-    const filtered = Memberdetails.filter((member) => {
-      const raw = getRawMembershipId(member).toLowerCase();
-      const formatted = getMembershipId(member).toLowerCase();
-      const name = String(member?.name || "").toLowerCase();
-      return (
-        raw.includes(q) ||
-        formatted.includes(q) ||
-        name.includes(q) ||
-        (!!normalizedQuery && formatted.includes(normalizedQuery))
-      );
-    });
-    setFilteredMembers(filtered);
-  }, [searchQuery, Memberdetails]);
+
+    // ── Date filter (Receipt Date) ──
+    if (fromDate || toDate) {
+      list = list.filter((member) => {
+        const key = toDateKey(member?.date);
+        if (!key) return false;
+        if (fromDate && key < fromDate) return false;
+        if (toDate && key > toDate) return false;
+        return true;
+      });
+    }
+
+    // ── Sort ──
+    const sorted = [...list];
+    if (sortOrder === "recent") {
+      sorted.sort((a, b) => getCreatedAt(b) - getCreatedAt(a));
+    } else if (sortOrder === "oldest") {
+      sorted.sort((a, b) => getCreatedAt(a) - getCreatedAt(b));
+    } else if (sortOrder === "dateDesc") {
+      sorted.sort((a, b) => getRecordDate(b) - getRecordDate(a));
+    } else if (sortOrder === "dateAsc") {
+      sorted.sort((a, b) => getRecordDate(a) - getRecordDate(b));
+    }
+
+    setFilteredMembers(sorted);
+  }, [searchQuery, Memberdetails, fromDate, toDate, sortOrder]);
+
+  const hasActiveFilters =
+    !!searchQuery.trim() || !!fromDate || !!toDate || sortOrder !== "recent";
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setFromDate("");
+    setToDate("");
+    setSortOrder("recent");
+  };
 
   const handleSearchChange = (e) => setSearchQuery(e.target.value);
   const clearSearch = () => setSearchQuery("");
@@ -317,6 +370,62 @@ export function ReceiptList() {
           </div>
         </div>
 
+        {/* ── Date filter + Sort ── */}
+        <div className="flex flex-wrap items-end gap-4 mb-6 mt-8">
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              From Date
+            </label>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              To Date
+            </label>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs font-semibold text-gray-600 mb-1">
+              Sort By
+            </label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#EF742C] focus:border-transparent"
+            >
+              <option value="recent">Recently Added (Newest First)</option>
+              <option value="oldest">Oldest Added First</option>
+              <option value="dateDesc">Receipt Date (Newest First)</option>
+              <option value="dateAsc">Receipt Date (Oldest First)</option>
+            </select>
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="px-4 py-2 text-sm font-semibold text-[#EF742C] border border-[#EF742C] rounded-lg hover:bg-orange-50"
+            >
+              Clear Filters
+            </button>
+          )}
+          {(fromDate || toDate) && (
+            <span className="text-sm text-gray-600 pb-2">
+              Showing {filteredMembers.length} of {Memberdetails.length}
+            </span>
+          )}
+        </div>
+
         {loadError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium">
             {loadError}
@@ -453,6 +562,8 @@ export function ReceiptList() {
                 ? "Loading receipts…"
                 : searchQuery
                 ? `No receipts found for "${searchQuery}"`
+                : fromDate || toDate
+                ? "No receipts found in the selected date range"
                 : "Not found."}
             </div>
           )}
