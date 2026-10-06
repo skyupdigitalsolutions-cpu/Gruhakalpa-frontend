@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
+import { formatPhone } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -589,7 +590,7 @@ export function MemberList() {
                         />
                       ) : (
                         <dd className="font-semibold text-[16px] text-[#595757]">
-                          {selectedMember.mobile || "-"}
+                          {formatPhone(selectedMember.mobile) || "-"}
                         </dd>
                       )}
                     </div>
@@ -632,7 +633,7 @@ export function MemberList() {
                   {field(
                     "Alternate Mobile Number",
                     "alternatemobile",
-                    selectedMember.alternatemobile,
+                    formatPhone(selectedMember.alternatemobile),
                   )}
                   {field(
                     "Alternate Email",
@@ -657,7 +658,7 @@ export function MemberList() {
                   {field(
                     "Nominee Mobile Number",
                     "nomineenumber",
-                    selectedMember.nomineenumber,
+                    formatPhone(selectedMember.nomineenumber),
                   )}
                   {field(
                     "Nominee Age",

@@ -5,6 +5,7 @@ import axios from "axios";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import { ChevronDown, Check } from "lucide-react";
+import { PHONE_REGEX, PHONE_ERROR, PHONE_PLACEHOLDER, formatPhone, phoneKey, toPhoneNumber } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -17,7 +18,8 @@ const extractMessage = (data) => {
 };
 
 // Keep only the last 10 digits so "+91 98765 43210" == "9876543210"
-const normaliseMobile = (v) => String(v ?? "").replace(/\D/g, "").slice(-10);
+// India → 10-digit local, UK/other → full digits with country code.
+const normaliseMobile = (v) => phoneKey(v);
 
 // Format a Date (or ISO string) as a "YYYY-MM-DD" string (what CustomDatePicker uses)
 const toISODate = (d) => {
@@ -533,7 +535,7 @@ export function SiteBookingForm() {
       MobileNumber: yup
         .string()
         .required("Mobile number is required")
-        .matches(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number"),
+        .matches(PHONE_REGEX, PHONE_ERROR),
       Date: yup
         .date()
         .required("Date is required")
@@ -562,7 +564,7 @@ export function SiteBookingForm() {
       // Block submission if a booking already exists for this client's mobile.
       if (duplicateBooking) {
         toast.error(
-          `Site booking already exists for this user (mobile ${duplicateBooking.mobilenumber}).`,
+          `Site booking already exists for this user (mobile ${formatPhone(duplicateBooking.mobilenumber)}).`,
         );
         return;
       }
@@ -609,7 +611,7 @@ export function SiteBookingForm() {
         const payload = {
           name: values.Name,
           date: values.Date,
-          mobilenumber: Number(values.MobileNumber),
+          mobilenumber: toPhoneNumber(values.MobileNumber),
           projectname: values.ProjectName,
           year: values.Year,
           paymentplan: values.PaymentPlan,
@@ -767,7 +769,7 @@ export function SiteBookingForm() {
       setDuplicateBooking(dup || null);
       if (dup) {
         toast.error(
-          `Site booking already exists for this user (mobile ${dup.mobilenumber}).`,
+          `Site booking already exists for this user (mobile ${formatPhone(dup.mobilenumber)}).`,
         );
       }
     } catch (error) {
@@ -1020,7 +1022,7 @@ export function SiteBookingForm() {
                   <span>✕</span>
                   <span>
                     Site booking already exists for this user (mobile{" "}
-                    {duplicateBooking.mobilenumber}) under membership{" "}
+                    {formatPhone(duplicateBooking.mobilenumber)}) under membership{" "}
                     {duplicateBooking.membership_id}. Duplicate booking is not
                     allowed.
                   </span>
@@ -1063,14 +1065,14 @@ export function SiteBookingForm() {
               <input
                 type="text"
                 name="MobileNumber"
-                placeholder="Enter Mobile Number"
+                placeholder={PHONE_PLACEHOLDER}
                 value={formik.values.MobileNumber}
                 onChange={formik.handleChange}
                 onBlur={() =>
                   memberStatus !== "found" &&
                   checkDuplicateBooking(formik.values.MobileNumber)
                 }
-                maxLength={10}
+                maxLength={16}
                 className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
               {formik.touched.MobileNumber && formik.errors.MobileNumber && (

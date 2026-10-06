@@ -6,6 +6,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { Header } from "./Header";
 import { ChevronDown, Check, Eye } from "lucide-react";
+import { PHONE_REGEX, PHONE_ERROR } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -894,10 +895,7 @@ const ReceiptForm = ({ initialData = {}, onReceiptGenerate = null }) => {
       .required("Received from name is required")
       .min(2, "Minimum 2 characters required"),
     phoneNumber: Yup.string()
-      .matches(
-        /^(\+?[1-9]\d{0,3}|0)?[6-9]\d{9}$/,
-        "Enter a valid contact number",
-      )
+      .matches(PHONE_REGEX, PHONE_ERROR)
       .required("Phone number is required"),
     Email: Yup.string()
       .trim()

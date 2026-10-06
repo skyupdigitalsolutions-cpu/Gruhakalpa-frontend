@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import axiosInstance from "../api/axios";
 import { Header } from "./Header";
+import { formatPhone } from "../utils/phone";
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN") : "-");
@@ -213,7 +214,7 @@ function DueTab() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                    {r.mobile || "-"}
+                    {formatPhone(r.mobile) || "-"}
                   </td>
                   <td className="px-4 py-3 text-gray-700">
                     {r.nextDue?.label || "-"}
@@ -374,7 +375,7 @@ function ClientDetailModal({ membershipId, onClose, onSent }) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
               <Info label="Name" value={booking?.name || member?.name} />
               <Info label="Membership ID" value={membershipId} />
-              <Info label="Mobile" value={member?.mobile || booking?.mobilenumber} />
+              <Info label="Mobile" value={formatPhone(member?.mobile || booking?.mobilenumber)} />
               <Info label="Email" value={member?.email || "-"} />
               <Info label="Project" value={booking?.projectname || "-"} />
               <Info label="Site" value={booking?.sitedimension || "-"} />

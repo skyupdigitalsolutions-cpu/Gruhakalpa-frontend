@@ -2,6 +2,7 @@ import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "./Header";
 import { generateReceiptPDF } from "../utils/generateReceiptPDF";
+import { formatPhone } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -766,7 +767,7 @@ export function ReceiptList() {
                       </dt>
                       &nbsp;
                       <dd className="font-semibold text-[16px] text-[#595757]">
-                        {selectedMember.mobilenumber || "-"}
+                        {formatPhone(selectedMember.mobilenumber) || "-"}
                       </dd>
                     </div>
                   </div>

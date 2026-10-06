@@ -6,6 +6,7 @@ import axios from "axios";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
 import { ChevronDown, Check, Eye, Download } from "lucide-react";
+import { PHONE_REGEX, PHONE_ERROR, PHONE_PLACEHOLDER } from "../utils/phone";
 
 const MEMBERSHIP_FEES = 2500;
 
@@ -538,7 +539,7 @@ const AddMember = () => {
       MobileNumber: yup
         .string()
         .required("Mobile number is required")
-        .matches(/^(\+91|0)?[6-9]\d{9}$/, "Enter valid 10-digit number"),
+        .matches(PHONE_REGEX, PHONE_ERROR),
       Email: yup
         .string()
         .required("Email is required")
@@ -627,7 +628,7 @@ const AddMember = () => {
       AlternateMobileNumber: yup
         .string()
         .required("Alternate mobile number is required")
-        .matches(/^(\+91|0)?[6-9]\d{9}$/, "Enter valid 10-digit number"),
+        .matches(PHONE_REGEX, PHONE_ERROR),
       AlternateEmail: yup
         .string()
         .required("Alternate email is required")
@@ -669,7 +670,7 @@ const AddMember = () => {
       NomineeMobileNumber: yup
         .string()
         .required("Nominee mobile number is required")
-        .matches(/^(\+91|0)?[6-9]\d{9}$/, "Enter valid 10-digit number"),
+        .matches(PHONE_REGEX, PHONE_ERROR),
       NomineeAge: yup
         .number()
         .required("Nominee age is required")
@@ -1603,7 +1604,7 @@ const AddMember = () => {
                     onChange={formikStep1.handleChange}
                     onBlur={formikStep1.handleBlur}
                     value={formikStep1.values.MobileNumber}
-                    placeholder="Enter Mobile No."
+                    placeholder={PHONE_PLACEHOLDER}
                     className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm"
                   />
                   {formikStep1.touched.MobileNumber &&
@@ -1802,7 +1803,7 @@ const AddMember = () => {
                     onChange={formikStep2.handleChange}
                     onBlur={formikStep2.handleBlur}
                     value={formikStep2.values.AlternateMobileNumber}
-                    placeholder="Enter Alternate Mobile No."
+                    placeholder={PHONE_PLACEHOLDER}
                     className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm"
                   />
                   {formikStep2.touched.AlternateMobileNumber &&
@@ -1961,7 +1962,7 @@ const AddMember = () => {
                     onChange={formikStep3.handleChange}
                     onBlur={formikStep3.handleBlur}
                     value={formikStep3.values.NomineeMobileNumber}
-                    placeholder="Enter Nominee Mobile No."
+                    placeholder={PHONE_PLACEHOLDER}
                     className="border border-gray-300 px-4 py-2.5 w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent rounded text-sm"
                   />
                   {formikStep3.touched.NomineeMobileNumber &&

@@ -3,6 +3,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
+import { formatPhone } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -958,7 +959,7 @@ export function SiteBookingList() {
                           />
                         ) : (
                           <dd className="font-semibold text-[16px] text-[#595757]">
-                            {selectedMember.mobilenumber || "-"}
+                            {formatPhone(selectedMember.mobilenumber) || "-"}
                           </dd>
                         )}
                       </div>
@@ -1374,7 +1375,7 @@ export function SiteBookingList() {
                         </dt>
                         &nbsp;
                         <dd className="font-semibold text-[16px] text-[#595757]">
-                          {memberDetailsData.mobile || "-"}
+                          {formatPhone(memberDetailsData.mobile) || "-"}
                         </dd>
                       </div>
                     </div>
@@ -1444,7 +1445,7 @@ export function SiteBookingList() {
                         Alternate Mobile:{" "}
                       </dt>
                       <dd className="inline font-normal">
-                        {memberDetailsData.alternatemobile || "-"}
+                        {formatPhone(memberDetailsData.alternatemobile) || "-"}
                       </dd>
                     </div>
                     <div className="border-b border-gray-200 pb-4">
@@ -1480,7 +1481,7 @@ export function SiteBookingList() {
                     <div className="border-b border-gray-200 pb-4">
                       <dt className="inline font-semibold">Nominee Mobile: </dt>
                       <dd className="inline font-normal">
-                        {memberDetailsData.nomineenumber || "-"}
+                        {formatPhone(memberDetailsData.nomineenumber) || "-"}
                       </dd>
                     </div>
                     <div className="border-b border-gray-200 pb-4">

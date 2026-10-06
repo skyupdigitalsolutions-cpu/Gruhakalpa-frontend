@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "./Header";
 import { toast } from "react-toastify";
+import { formatPhone } from "../utils/phone";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -243,7 +244,7 @@ export function FixedDepositList() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Info label="Membership Id" value={selected.membershipId} />
               <Info label="Name" value={selected.name} />
-              <Info label="Mobile" value={selected.mobilenumber || "—"} />
+              <Info label="Mobile" value={formatPhone(selected.mobilenumber) || "—"} />
               <Info label="Issued Date" value={fmtDate(selected.date)} />
               <Info label="Tenure" value={`${selected.tenureMonths} months`} />
               <Info label="Maturity Date" value={fmtDate(selected.maturityDate)} />
