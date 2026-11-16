@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Header } from "./Header";
 import { generateReceiptPDF } from "../utils/generateReceiptPDF";
 import { formatPhone } from "../utils/phone";
+import { SendNotificationModal } from "./SendNotificationModal";
 
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:3001";
 
@@ -84,6 +85,8 @@ export function ReceiptList() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  // Receipt whose "Send" (WhatsApp / email) modal is open
+  const [sendFor, setSendFor] = useState(null);
 
   // Superadmin-only hard delete. Backend re-verifies the token belongs to a
   // superadmin, so hiding the button is only a UI convenience.
@@ -553,6 +556,28 @@ export function ReceiptList() {
                           </>
                       )}
                       </button>
+                      {!member.cancelled && getRawMembershipId(member) && (
+                        <button
+                          onClick={() => setSendFor(member)}
+                          title="Send this receipt on WhatsApp / email"
+                          className="w-[80px] font-medium border-1 py-[6px] px-[10px] border-green-600 rounded text-[14px] text-green-600 hover:bg-green-600 hover:text-white transition-colors duration-200 flex items-center justify-center gap-1"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                            />
+                          </svg>
+                          Send
+                        </button>
+                      )}
                       {isSuperAdmin && (
                         <button
                           onClick={() => handleDeleteReceipt(member)}
@@ -835,7 +860,16 @@ export function ReceiptList() {
                       </dd>
                     </div>
                   )}
-                  <div className="col-span-2 flex justify-end pt-2">
+                  <div className="col-span-2 flex justify-end gap-2 pt-2">
+                    {!selectedMember.cancelled &&
+                      getRawMembershipId(selectedMember) && (
+                        <button
+                          onClick={() => setSendFor(selectedMember)}
+                          className="flex items-center gap-2 font-medium border py-[8px] px-[20px] border-green-600 rounded text-[14px] text-green-600 hover:bg-green-600 hover:text-white transition-colors duration-200"
+                        >
+                          Send via WhatsApp / Email
+                        </button>
+                      )}
                     <button
                       onClick={() => handleDownloadReceipt(selectedMember)}
                       disabled={downloadingId === selectedMember._id}
@@ -864,6 +898,16 @@ export function ReceiptList() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Send receipt / notification to this lead ── */}
+      {sendFor && (
+        <SendNotificationModal
+          membershipId={getRawMembershipId(sendFor)}
+          initialReceiptId={sendFor._id}
+          initialType="receipt"
+          onClose={() => setSendFor(null)}
+        />
       )}
     </div>
   );

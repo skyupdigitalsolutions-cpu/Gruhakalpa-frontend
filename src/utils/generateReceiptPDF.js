@@ -237,6 +237,12 @@ export const generateReceiptPDF = async (receipt) => {
   }
 
   // ── Strategy 2: Re-generate on the fly with the Gruhakalpa template ──────────
+  const pdf = await renderReceiptPDF(receipt);
+  pdf.save(filename);
+};
+
+// ─── Render the receipt template into a jsPDF document (no download) ─────────
+const renderReceiptPDF = async (receipt) => {
   const html2canvas = (await import("html2canvas")).default;
   const jsPDF = (await import("jspdf")).default;
 
@@ -260,8 +266,23 @@ export const generateReceiptPDF = async (receipt) => {
     const imgData = canvas.toDataURL("image/jpeg", 0.85);
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     pdf.addImage(imgData, "JPEG", 1, 1, 208, 295);
-    pdf.save(filename);
+    return pdf;
   } finally {
     document.body.removeChild(container);
   }
+};
+
+// ─── Build THIS receipt's PDF as base64 (used for WhatsApp / email re-send) ──
+// Always renders from the receipt record itself, so the PDF matches exactly
+// this receipt — the stored Cloudinary file is shared by all of a member's
+// receipts in the same project and may show a different receipt.
+export const buildReceiptPDFBase64 = async (receipt) => {
+  const projectPart = (receipt.projectname || "").replace(/[^a-zA-Z0-9]/g, "_");
+  const idPart = (receipt.membershipid || receipt.seniority_no || "").replace(/[^a-zA-Z0-9]/g, "_");
+  const receiptPart = (receipt.receipt_no || "draft").replace(/[^a-zA-Z0-9]/g, "_");
+  const filename = `${projectPart}_${idPart}_${receiptPart}.pdf`;
+
+  const pdf = await renderReceiptPDF(receipt);
+  const pdfBase64 = pdf.output("datauristring").split(",")[1];
+  return { pdfBase64, pdfFilename: filename };
 };

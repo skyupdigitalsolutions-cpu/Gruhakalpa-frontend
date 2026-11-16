@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import axiosInstance from "../api/axios";
 import { Header } from "./Header";
 import { formatPhone } from "../utils/phone";
+import { SendNotificationModal } from "./SendNotificationModal";
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN") : "-");
@@ -87,6 +88,7 @@ function DueTab() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState(null);
+  const [notifyId, setNotifyId] = useState(null); // lead for "Send receipt / notification"
   const [sending, setSending] = useState(""); // `${mid}:${channel}`
 
   const fetchRows = useCallback(async () => {
@@ -259,6 +261,13 @@ function DueTab() {
                           ? "..."
                           : "Email"}
                       </button>
+                      <button
+                        onClick={() => setNotifyId(r.membership_id)}
+                        title="Send a receipt or notification to this client"
+                        className="font-medium border py-[5px] px-3 border-gray-500 rounded text-[13px] text-gray-600 hover:bg-gray-600 hover:text-white transition whitespace-nowrap"
+                      >
+                        Send…
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -281,6 +290,13 @@ function DueTab() {
           membershipId={detailId}
           onClose={() => setDetailId(null)}
           onSent={fetchRows}
+        />
+      )}
+
+      {notifyId && (
+        <SendNotificationModal
+          membershipId={notifyId}
+          onClose={() => setNotifyId(null)}
         />
       )}
     </div>
@@ -306,6 +322,7 @@ function ClientDetailModal({ membershipId, onClose, onSent }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState("");
+  const [showNotify, setShowNotify] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -411,6 +428,12 @@ function ClientDetailModal({ membershipId, onClose, onSent }) {
               >
                 Send both
               </button>
+              <button
+                onClick={() => setShowNotify(true)}
+                className="px-4 py-2 rounded-lg border border-[#EF742C] text-[#EF742C] text-sm font-semibold hover:bg-orange-50"
+              >
+                Send receipt / notification…
+              </button>
             </div>
 
             {/* Schedule */}
@@ -510,6 +533,16 @@ function ClientDetailModal({ membershipId, onClose, onSent }) {
           </>
         )}
       </div>
+
+      {showNotify && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <SendNotificationModal
+            membershipId={membershipId}
+            onClose={() => setShowNotify(false)}
+            onSent={load}
+          />
+        </div>
+      )}
     </div>
   );
 }
